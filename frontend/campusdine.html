@@ -1,0 +1,2108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CampusDine — order ahead, skip the line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Re-maps the Tailwind colour names the app already uses onto the CampusDine palette.
+  tailwind.config = { theme: { extend: { colors: {
+    amber:   { 50: '#FFF8DA', 100: '#FFEFB0', 200: '#FFE27A', 300: '#8A5B00', 400: '#FFC20E', 500: '#B87500', 600: '#9A6200', 700: '#7A4D00', 800: '#6B4300', 900: '#4A2F00' },
+    emerald: { 50: '#DDF3E8', 100: '#C3E9D5', 200: '#A0DBBE', 300: '#168A57', 400: '#168A57', 500: '#168A57', 600: '#12794C', 700: '#0E6340', 800: '#0B5A39', 900: '#073B25' },
+    red:     { 300: '#B42318', 400: '#C2321F', 500: '#D92D20', 600: '#B42318', 700: '#9B1C12', 900: '#6E120B', 950: '#FDE5E2' },
+    gray:    { 100: '#EEF1F5', 200: '#E3E8F1', 300: '#3B475E', 400: '#55627B', 500: '#47536B', 600: '#3B475E', 700: '#2A3550' },
+    orange:  { 200: '#FFE27A', 300: '#FFC20E', 700: '#6B4300' },
+    green:   { 300: '#168A57' },
+    slate:   { 950: '#101B2D' },
+  } } } };
+</script>
+
+<style>
+  /* CampusDine — Dhaka yellow-cab yellow + deep navy, with the canteen meal token as the signature shape. */
+  :root {
+    --chalk: #EEF1F5;
+    --paper: #FFFFFF;
+    --ink: #101B2D;
+    --ink-2: #55627B;
+    --line: #D5DCE8;
+    --line-strong: #B5BFD0;
+    --taxi: #FFC20E;
+    --taxi-deep: #E0A800;
+    --taxi-tint: #FFF4CC;
+    --chili: #D92D20;
+    --chili-tint: #FDE5E2;
+    --leaf: #168A57;
+    --leaf-tint: #DDF3E8;
+    --indigo: #3F2E8C;
+    --indigo-tint: #E9E5FA;
+    --ink-tint: #E3E8F1;
+    /* names the JSX still references through inline styles */
+    --bg: var(--chalk);
+    --panel: var(--paper);
+    --panel-border: var(--line);
+    --ink-soft: var(--ink-2);
+    --teal: var(--ink-tint);
+    --teal-deep: var(--ink);
+    --gold: #8A5B00;
+    --gold-bright: var(--ink);
+    --gold-deep: #6B4300;
+    --brick: var(--chili);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; scroll-behavior: smooth; }
+  body {
+    background: var(--chalk);
+    color: var(--ink);
+    font-family: 'Hind Siliguri', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font-family: inherit; }
+  button { cursor: pointer; }
+  ::selection { background: var(--taxi); color: var(--ink); }
+  :focus-visible { outline: 3px solid var(--taxi); outline-offset: 2px; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* type: Bricolage Grotesque carries headings, buttons, prices and tokens */
+  .font-display { font-family: 'Bricolage Grotesque', 'Hind Siliguri', sans-serif !important; letter-spacing: -0.01em; }
+  .font-mono { font-family: 'Bricolage Grotesque', 'Hind Siliguri', sans-serif !important; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  .font-600 { font-weight: 600; } .font-700 { font-weight: 700; } .font-800 { font-weight: 800; }
+  .uppercase { text-transform: none !important; }
+  .tracking-widest, .tracking-wider, [class*="tracking-["] { letter-spacing: normal !important; }
+
+  /* surfaces */
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .card.border-dashed { border-style: dashed; border-color: var(--line-strong); background: transparent; }
+  .card .font-display { color: var(--ink); }
+  .border-t, .border-b, .border-y { border-color: var(--line) !important; }
+  .border-amber-400\/10, .border-amber-400\/20 { border-color: var(--line) !important; }
+  .border-amber-400\/30, .border-amber-400\/40 { border-color: var(--line-strong) !important; }
+  .border-red-900\/40 { border-color: #F0B8B2 !important; }
+  .bg-red-950\/30 { background: var(--chili-tint) !important; }
+
+  /* primary action: taxi yellow with an ink outline and a hard bottom edge, like a pressed key */
+  .btn-primary {
+    background: var(--taxi);
+    color: var(--ink);
+    font-family: 'Bricolage Grotesque', 'Hind Siliguri', sans-serif;
+    font-weight: 700;
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    box-shadow: 0 3px 0 var(--ink);
+    transition: transform .08s ease, box-shadow .08s ease, background .15s ease;
+  }
+  .btn-primary:hover { background: #FFCD3A; }
+  .btn-primary:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+  .btn-primary:disabled { background: #E6EAF0; color: #7C879C; border-color: var(--line-strong); box-shadow: none; cursor: not-allowed; transform: none; }
+  .btn-gold {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    border-radius: 10px;
+    font-family: 'Bricolage Grotesque', 'Hind Siliguri', sans-serif;
+    font-weight: 700;
+    transition: background .15s ease;
+  }
+  .btn-gold:hover { background: var(--taxi-tint); }
+  .btn-gold:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* tabs and filter chips (light pages): quiet when idle, ink when selected */
+  .tab-btn { font-family: 'Bricolage Grotesque', 'Hind Siliguri', sans-serif; font-weight: 600; border-radius: 999px; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+  .tab-btn:not(.active) { background: var(--paper); border: 1px solid var(--line-strong); color: var(--ink-2); }
+  .tab-btn:not(.active):hover { border-color: var(--ink); color: var(--ink); }
+  .tab-btn.active { background: var(--ink); color: #fff; border: 1px solid var(--ink); }
+
+  /* top bar: navy with a taxi-yellow rule */
+  .topbar > div { max-width: 80rem; }
+  .topbar { background: var(--ink); color: #fff; border-bottom: 4px solid var(--taxi); }
+  .topbar [style*="--ink-soft"] { color: #AEB9CE !important; }
+  .topbar .tab-btn { border-radius: 10px; padding-left: .8rem; padding-right: .8rem; }
+  .topbar .tab-btn:not(.active) { background: transparent; border-color: transparent; color: #C4CEE0; }
+  .topbar .tab-btn:not(.active):hover { background: rgba(255,255,255,.1); color: #fff; }
+  .topbar .tab-btn.active { background: var(--taxi); color: var(--ink); border-color: var(--taxi); }
+  .topbar button:not(.tab-btn) { border-color: rgba(255,255,255,.28) !important; color: #E7ECF5; }
+  .topbar button:not(.tab-btn):hover { background: rgba(255,255,255,.1); }
+  .topbar .absolute.right-0 { color: var(--ink); }
+  .topbar .absolute.right-0 .text-gray-400 { color: var(--ink-2) !important; }
+  .logo-badge { background: var(--taxi); border: 2px solid var(--ink); border-radius: 10px !important; color: var(--ink); }
+  .logo-badge svg { color: var(--ink) !important; }
+  .topbar .logo-badge { border-color: var(--taxi); }
+  /* role chooser: neutral until hovered, so the sign-in page keeps a single bold element */
+  button .logo-badge { background: var(--ink-tint); border-color: var(--ink-tint); }
+  button:hover .logo-badge { background: var(--taxi); border-color: var(--ink); }
+
+  /* the meal token: the one bold shape in the product */
+  .ticket {
+    position: relative;
+    background: var(--taxi);
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    box-shadow: 0 4px 0 var(--ink);
+  }
+  .ticket::before, .ticket::after {
+    content: ""; position: absolute; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; background: var(--chalk); border: 2px solid var(--ink); border-radius: 50%;
+  }
+  .ticket::before { left: -12px; clip-path: inset(0 0 0 50%); }
+  .ticket::after { right: -12px; clip-path: inset(0 50% 0 0); }
+  .ticket .perf { border-left: 2px dashed var(--ink); }
+  .ticket .text-amber-300, .ticket .text-amber-400, .ticket .text-gray-400, .ticket .text-gray-300 { color: var(--ink) !important; }
+  .ticket .opacity-70, .ticket .opacity-80 { opacity: .75; }
+  .card .ticket::before, .card .ticket::after { background: var(--paper); }
+  /* Track Order: the token is the card's header strip */
+  .card.overflow-hidden > .ticket:first-child { border-radius: 0; border-width: 0 0 2px 0; box-shadow: none; }
+  .card.overflow-hidden > .ticket:first-child::before, .card.overflow-hidden > .ticket:first-child::after { display: none; }
+  .card.overflow-hidden:has(> .ticket:first-child) { border: 2px solid var(--ink); box-shadow: 0 4px 0 var(--ink); }
+  .text-amber-300 { color: var(--ink) !important; }
+  .text-amber-400 { color: #8A5B00 !important; }
+  .topbar .text-amber-400 { color: var(--taxi) !important; }
+
+  /* progress */
+  .stepper-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--paper); border: 2px solid var(--line-strong); }
+  .stepper-dot.done { background: var(--leaf); border-color: var(--leaf); }
+  .stepper-dot.current { background: var(--taxi); border-color: var(--ink); box-shadow: 0 0 0 4px rgba(255,194,14,.35); }
+  .simulation-card { position: relative; overflow: hidden; background: var(--ink); color: #fff; }
+  .simulation-line { position: relative; height: 4px; border-radius: 999px; background: rgba(255,255,255,.18); overflow: hidden; }
+  .simulation-line::after { content: ""; position: absolute; inset: 0; width: 38%; border-radius: inherit; background: var(--taxi); animation: kitchenRun 2.8s ease-in-out infinite; }
+  .simulation-dot { background: var(--taxi) !important; animation: dotGlow 1.8s ease-in-out infinite; }
+  @keyframes kitchenRun { 0% { transform: translateX(-110%); } 50%, 100% { transform: translateX(280%); } }
+  @keyframes dotGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,194,14,.5); } 50% { box-shadow: 0 0 0 7px rgba(255,194,14,0); } }
+
+  /* calendar */
+  .cal-cell { aspect-ratio: 1/1; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; user-select: none; border: 1px solid var(--line); background: var(--paper); transition: border-color .12s ease; }
+  .cal-cell:hover { border-color: var(--ink); }
+  .cal-full { background: var(--leaf-tint); color: #0B5A39; border-color: var(--leaf); }
+  .cal-half { background: var(--taxi-tint); color: #6B4300; border-color: var(--taxi-deep); }
+
+  /* forms */
+  input, select, textarea { background: var(--paper); color: var(--ink); border-radius: 10px !important; border-color: var(--line-strong) !important; }
+  input::placeholder { color: #7C879C; }
+  input:focus, select:focus { outline: 3px solid rgba(255,194,14,.6); outline-offset: 0; border-color: var(--ink) !important; }
+  input[type="checkbox"] { accent-color: var(--ink); }
+  table thead, table thead tr, table thead th { background: var(--ink) !important; color: #fff !important; }
+  table tbody tr:hover { background: var(--taxi-tint); }
+
+  /* status notes: one family, four meanings */
+  .note { border-radius: 10px; border: 1px solid transparent; }
+  .note-info { background: var(--ink-tint); color: var(--ink); border-color: #C9D3E4; }
+  .note-ok { background: var(--leaf-tint); color: #0B5A39; border-color: #A9DCC3; }
+  .note-warn { background: var(--taxi-tint); color: #6B4300; border-color: #F2D77A; }
+  .note-danger { background: var(--chili-tint); color: #9B1C12; border-color: #F0B8B2; }
+  .note-iftar { background: var(--indigo-tint); color: var(--indigo); border-color: #CFC6F0; }
+
+  /* landing */
+  .announce { background: var(--taxi); color: var(--ink); border-bottom: 2px solid var(--ink); }
+  .hero-cta { box-shadow: 0 4px 0 var(--ink); }
+  .feature-mark { width: 6px; align-self: stretch; border-radius: 3px; background: var(--taxi); border: 1px solid var(--ink); }
+
+  .fade-in { animation: pageLift .3s ease-out both; }
+  @keyframes pageLift { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+  main.max-w-6xl { min-height: calc(100vh - 76px); padding-top: 2rem; padding-bottom: 4rem; }
+  .sticky.top-20 { top: 5.5rem; }
+  @media (max-width: 768px) {
+    main.max-w-6xl { padding: 1.25rem 1rem 3rem; }
+    .sticky.top-20 { position: static; }
+    /* top bar on phones: brand + actions on one row, tabs as a single swipeable strip */
+    .topbar > div { gap: .5rem !important; padding-top: .6rem !important; padding-bottom: .6rem !important; }
+    .topbar > div > div:nth-child(2) { order: 3; width: 100%; flex-wrap: nowrap !important; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+    .topbar > div > div:nth-child(2)::-webkit-scrollbar { display: none; }
+    .topbar .tab-btn { white-space: nowrap; flex-shrink: 0; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ---------------- Constants ---------------- */
+const DEFAULT_API_BASE = (window.location.origin && window.location.origin !== "null")
+  ? window.location.origin
+  : "http://localhost:5000";
+const LOW_STOCK_THRESHOLD = 10;
+const CATEGORIES = [
+  { id: "heavy", label: "Heavy Meals" },
+  { id: "snacks", label: "Snacks" },
+  { id: "drinks", label: "Drinks" },
+];
+const STATUSES = ["Received", "Cooking", "Ready"];
+const ACTIVE_STATUSES = ["Received", "Confirmed", "Cooking"];
+const stepIndexOf = (status) => (status === "Confirmed" ? 0 : STATUSES.indexOf(status));
+const shortToken = (t) => String(t || "").slice(0, 8).toUpperCase();
+
+/* ---------------- Language (English / বাংলা) + shared UI helpers ---------------- */
+const BN = {
+  "Menu & Order": "মেনু ও অর্ডার", "Track Order": "অর্ডার ট্র্যাক", "Friends": "বন্ধুরা", "Calendar & Classes": "ক্যালেন্ডার ও ক্লাস", "Wallet": "ওয়ালেট", "My Stats": "আমার হিসাব", "Profile & Alerts": "প্রোফাইল",
+  "Overview": "ওভারভিউ", "Menu": "মেনু", "Orders Queue": "অর্ডার কিউ", "Pickup": "পিকআপ", "Reports": "রিপোর্ট", "Coupons": "কুপন", "Reviews": "রিভিউ", "Settings": "সেটিংস",
+  "Cart Summary": "কার্ট", "Total Amount": "মোট টাকা", "Confirm & Get Token": "অর্ডার নিশ্চিত করুন", "Add": "যোগ করুন", "Search meals": "খাবার খুঁজুন", "Available only": "শুধু পাওয়া যায়",
+  "Heavy Meals": "ভারী খাবার", "Snacks": "নাস্তা", "Drinks": "পানীয়", "All": "সব", "Stock Out": "স্টক শেষ", "Cancel order": "অর্ডার বাতিল", "Order again": "আবার অর্ডার",
+  "Token Number": "টোকেন নম্বর", "Total Bill": "মোট বিল", "Meal date": "খাবারের তারিখ", "Items": "আইটেম", "Cash": "নগদ", "Today": "আজ", "Tomorrow": "আগামীকাল",
+  "When do you want to eat?": "কখন খেতে চান?", "Pickup time": "পিকআপের সময়", "No pickup time chosen": "পিকআপের সময় বাছাই হয়নি", "No pickup slots on this date.": "এই তারিখে কোনো পিকআপ স্লট নেই।",
+  "Quiet": "ফাঁকা", "Moderate": "মোটামুটি", "Busy": "ভিড়", "Full": "পূর্ণ", "class": "ক্লাস", "Vegetarian": "নিরামিষ", "No nuts": "বাদাম নেই", "Mild (not spicy)": "কম ঝাল", "Voice search": "ভয়েস সার্চ", "Listening…": "শুনছি…",
+  "Last-hour deal": "শেষ ঘণ্টার অফার", "meals saved from waste": "খাবার অপচয় থেকে বাঁচানো হয়েছে", "Iftar": "ইফতার", "Ramadan Mode": "রমজান মোড", "Jummah": "জুম্মা",
+  "Group orders": "গ্রুপ অর্ডার", "Treat a friend": "বন্ধুকে ট্রিট দিন", "Create group": "গ্রুপ বানান", "Join": "যোগ দিন", "Group name": "গ্রুপের নাম", "Group code": "গ্রুপ কোড", "Equal split": "সমান ভাগ", "Everyone pays own items": "যার যার খাবারের টাকা",
+  "Confirm": "নিশ্চিত", "Place group order": "গ্রুপ অর্ডার দিন", "Send": "পাঠান", "Send credit": "টাকা পাঠান", "Buy a meal": "খাবার কিনে দিন", "Friend's ID": "বন্ধুর আইডি", "Message": "বার্তা",
+  "Class routine": "ক্লাস রুটিন", "Add class": "ক্লাস যোগ", "Streak": "স্ট্রিক", "Points": "পয়েন্ট", "Redeem": "রিডিম", "Weekly budget": "সাপ্তাহিক বাজেট", "Spent this week": "এই সপ্তাহে খরচ", "Save": "সংরক্ষণ",
+  "Show pickup QR": "পিকআপ QR দেখান", "Hide QR": "QR লুকান", "orders ahead of you": "টি অর্ডার আপনার আগে", "Collected": "নেওয়া হয়েছে", "Notifications": "নোটিফিকেশন",
+  "Mark collected": "হস্তান্তর করুন", "Collect": "হস্তান্তর", "Scan or type the order code": "অর্ডার কোড স্ক্যান বা টাইপ করুন", "Cook plan": "রান্নার পরিকল্পনা",
+};
+let LANG = "en";
+const tr = (s) => (LANG === "bn" && BN[s]) || s;
+const dhakaNow = () => new Date(Date.now() + 6 * 3600e3);
+const isoDay = (offset = 0) => new Date(dhakaNow().getTime() + offset * 864e5).toISOString().slice(0, 10);
+const dayText = (offset) => (offset === 0 ? tr("Today") : offset === 1 ? tr("Tomorrow") : new Date(`${isoDay(offset)}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }));
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const STATUS_DOT = { quiet: "#168A57", moderate: "#E5A400", busy: "#E8701A", full: "#D92D20" };
+const SPICE = ["", "🌶", "🌶🌶", "🌶🌶🌶"];
+const inputCls = "px-3 py-2 rounded-lg border text-xs";
+const inputStyle = { borderColor: "var(--panel-border)" };
+
+function DayPicker({ value, onChange }) {
+  return (
+    <select value={value} onChange={e => onChange(Number(e.target.value))} className={inputCls} style={inputStyle}>
+      {[0, 1, 2, 3, 4, 5, 6].map(o => <option key={o} value={o}>{dayText(o)}</option>)}
+    </select>
+  );
+}
+
+// Pickup-slot grid with the live rush meter (green = quiet … red = full).
+function SlotPicker({ data, value, onChange }) {
+  if (!data) return <p className="text-[11px] text-gray-400">…</p>;
+  const slots = data.slots.filter(s => !s.past);
+  if (slots.length === 0) return <p className="text-[11px] text-gray-400">{tr("No pickup slots on this date.")}</p>;
+  const renderGroup = (kind) => {
+    const list = slots.filter(s => s.kind === kind);
+    if (!list.length) return null;
+    return (
+      <div key={kind} className="mb-2">
+        {kind === "iftar" && <div className="text-[10px] font-700 mb-1" style={{ color: "#3F2E8C" }}>🌙 {tr("Iftar")}</div>}
+        <div className="flex flex-wrap gap-1.5 overflow-y-auto pr-1" style={{ maxHeight: 176 }}>
+          {list.map(s => (
+            <button key={s.time} disabled={!s.available} onClick={() => onChange(value === s.time ? "" : s.time)} title={`${s.booked}/${s.capacity}${s.clash ? " · " + s.clash : ""}`}
+                    className={`px-2 py-1 rounded-md border text-[11px] flex items-center gap-1 ${value === s.time ? "bg-amber-400 text-slate-950 font-700" : "border-amber-400/30"} ${!s.available ? "opacity-40 cursor-not-allowed line-through" : ""}`}>
+              <span className="w-2 h-2 rounded-full inline-block" style={{ background: STATUS_DOT[s.status] }}></span>{s.time}{s.clash ? <span title={s.clash}>📚</span> : null}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div>
+      {data.jummah && <div className="text-[10px] mb-1" style={{ color: "#8A5B00" }}>🕌 {tr("Jummah")}: slots pause 12:30–14:00 · extra capacity before/after</div>}
+      {renderGroup("lunch")}{renderGroup("iftar")}
+      <div className="flex gap-3 text-[10px] text-gray-400 mt-1 flex-wrap">
+        {["quiet", "moderate", "busy", "full"].map(k => <span key={k} className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: STATUS_DOT[k] }}></span>{tr(k[0].toUpperCase() + k.slice(1))}</span>)}
+        <span>📚 {tr("class")}</span>
+      </div>
+    </div>
+  );
+}
+
+function DietTags({ item }) {
+  const bits = [];
+  bits.push(<span key="v" className="text-[10px]" title={item.is_veg ? "Vegetarian" : "Contains meat/fish/egg"}>{item.is_veg ? "🟢" : "🔴"}</span>);
+  if (item.spice_level > 0) bits.push(<span key="s" className="text-[10px]" title={`Spice ${item.spice_level}/3`}>{SPICE[item.spice_level]}</span>);
+  if (item.has_nuts) bits.push(<span key="n" className="text-[10px]" title="Contains nuts">🥜</span>);
+  if (item.is_halal === 0 || item.is_halal === false) bits.push(<span key="h" className="text-[10px] text-red-400">non-halal</span>);
+  if (item.iftar_only) bits.push(<span key="i" className="text-[10px]" style={{ color: "#3F2E8C" }}>🌙 {tr("Iftar")}</span>);
+  return <div className="flex items-center gap-1.5 mt-1">{bits}</div>;
+}
+
+// Order QR (SVG from the server, fetched with the login token).
+function QRBox({ orderId }) {
+  const [svg, setSvg] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetch(`${window.__campusApiBase}/api/orders/${orderId}/qr`, { headers: { Authorization: `Bearer ${window.__campusToken}` } })
+      .then(r => (r.ok ? r.text() : "")).then(t => { if (live) setSvg(t); }).catch(() => {});
+    return () => { live = false; };
+  }, [orderId]);
+  if (!svg) return <div className="text-[11px] text-gray-400 mt-3">…</div>;
+  return <div className="mt-3 inline-block p-2 rounded-xl bg-white border" style={{ borderColor: "var(--panel-border)" }} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
+
+/* ---------------- API helper ---------------- */
+async function api(apiBase, path, { method = "GET", body, token } = {}) {
+  const res = await fetch(`${apiBase}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* empty body */ }
+  if (!res.ok) { const err = new Error(data.error || `Request failed (${res.status})`); err.status = res.status; throw err; }
+  return data;
+}
+
+/* ---------------- Icon Component ---------------- */
+const Icon = ({ path, className = "w-5 h-5", style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+       strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <path d={path} />
+  </svg>
+);
+const I = {
+  menu: "M3 6h18M3 12h18M3 18h18",
+  cart: "M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L22 8H6",
+  clock: "M12 2a10 10 0 1 0 .001 20.001A10 10 0 0 0 12 2Zm1 5v5l4 2",
+  wallet: "M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm14 3h.01M3 9h18",
+  calendar: "M8 2v4M16 2v4M3 9h18M4 4h16a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z",
+  dashboard: "M4 4h7v7H4V4Zm9 0h7v4h-7V4Zm0 7h7v9h-7v-9ZM4 14h7v6H4v-6Z",
+  box: "M21 8L12 3 3 8l9 5 9-5Zm0 0v8l-9 5-9-5V8m18 0-9 5-9-5",
+  chart: "M4 19V5M4 19h16M8 15v4M12 11v8M16 7v12",
+  bell: "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9ZM13.7 21a2 2 0 0 1-3.4 0",
+  plus: "M12 5v14M5 12h14",
+  minus: "M5 12h14",
+  check: "M20 6 9 17l-5-5",
+  arrow: "M5 12h14M13 5l7 7-7 7",
+  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+  user: "M20 21a8 8 0 1 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",
+  ticket: "M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V8Z",
+  plug: "M9 7V2m6 5V2M6 7h12l-1 6a5 5 0 0 1-10 0L6 7Zm4 11v3h4v-3",
+};
+
+/* ---------------- Helpers ---------------- */
+async function downloadFile(path, filename) {
+  const res = await fetch(`${window.__campusApiBase}${path}`, { headers: { Authorization: `Bearer ${window.__campusToken}` } });
+  if (!res.ok) throw new Error("Download failed");
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+}
+const taka = (n) => `৳${Number(n || 0).toLocaleString("en-BD")}`;
+function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+function monthLabel(ym) {
+  const [y, m] = ym.split("-");
+  return new Date(Number(y), Number(m) - 1).toLocaleString("default", { month: "short" });
+}
+
+/* ---------------- Login / Landing Screen ---------------- */
+function Login({ apiBase, setApiBase, onAuth }) {
+  const [role, setRole] = useState(null);
+  const [mode, setMode] = useState("login");
+  const [name, setName] = useState("");
+  const [externalId, setExternalId] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [resetMsg, setResetMsg] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const authRef = useRef(null);
+
+  const roles = [
+    { key: "student", label: "Student", desc: "Order meals, track pickup, manage subscription.", icon: I.user },
+    { key: "teacher", label: "Faculty Member", desc: "Faculty meal ordering with dedicated rates.", icon: I.user },
+    { key: "admin", label: "Canteen Admin", desc: "Run orders, menu stock, and revenue reports.", icon: I.dashboard },
+  ];
+
+  const features = [
+    { title: "পিকআপের সময় বেছে নিন", desc: "১০ মিনিটের স্লটে বুক করুন — ভিড় কম থাকলে সবুজ দেখাবে।" },
+    { title: "QR টোকেনে খাবার নিন", desc: "কাউন্টারে QR দেখান, লাইনে দাঁড়ানোর দরকার নেই।" },
+    { title: "বন্ধুদের সাথে অর্ডার", desc: "একসাথে অর্ডার করুন, বিল নিজে নিজেই ভাগ হয়ে যাবে।" },
+    { title: "ওয়ালেট ও বাজেট", desc: "ক্যাশলেস পেমেন্ট আর সাপ্তাহিক খরচের হিসাব এক জায়গায়।" },
+  ];
+
+  const sampleMenu = [
+    { name: "Kacchi Biryani", bn: "কাচ্চি বিরিয়ানি", price: "৳ ১৬০", img: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=500&q=80" },
+    { name: "Special Beef Tehari", bn: "বিফ তেহারি", price: "৳ ৯০", img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=500&q=80" },
+    { name: "Vintage Cold Brew", bn: "কোল্ড ব্রু কফি", price: "৳ ৪০", img: "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=500&q=80" },
+  ];
+
+  const scrollToAuth = () => authRef.current && authRef.current.scrollIntoView({ behavior: "smooth" });
+
+  const submit = async () => {
+    setError(null);
+    if (!externalId || !password || (mode === "register" && !name)) {
+      setError("সবগুলো ফিল্ড সঠিকভাবে পূরণ করুন।");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = mode === "login"
+        ? await api(apiBase, "/api/auth/login", { method: "POST", body: { externalId, password } })
+        : await api(apiBase, "/api/auth/register", { method: "POST", body: { name, externalId, role, password } });
+      onAuth(data.token, data.user);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitReset = async () => {
+    setError(null); setResetMsg(null);
+    if (!externalId || !newPassword) { setError("সব তথ্য দিন।"); return; }
+    if (newPassword.length < 6) { setError("পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।"); return; }
+    setBusy(true);
+    try {
+      await api(apiBase, "/api/auth/verify-otp-and-reset", { method: "POST", body: { externalId, otp, newPassword } });
+      setMode("login");
+      setResetMsg("পাসওয়ার্ড আপডেট হয়েছে — নতুন পাসওয়ার্ড দিয়ে লগইন করুন।");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requestReset = async () => {
+    setError(null); setResetMsg(null);
+    if (!externalId) { setError("Enter your email or external ID first."); return; }
+    setBusy(true);
+    try {
+      const data = await api(apiBase, "/api/auth/request-password-reset", { method: "POST", body: { externalId } });
+      setResetMsg((data.message || "OTP sent. Check the configured reset channel.") + (data._devOTP ? ` (dev OTP: ${data._devOTP})` : ""));
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col justify-between">
+      <div className="announce text-center py-2 px-4 text-sm font-600">
+        লাইনে দাঁড়াতে হবে না — আগেই অর্ডার করুন, নিজের সময়ে খাবার নিন।
+      </div>
+
+      <header className="sticky top-0 z-30 bg-white border-b px-6" style={{ borderColor: "var(--line)" }}>
+        <div className="max-w-6xl mx-auto py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="logo-badge w-10 h-10 grid place-items-center">
+              <Icon path={I.ticket} className="w-5 h-5" />
+            </div>
+            <span className="font-display text-xl font-800 leading-none">CampusDine</span>
+          </div>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-600" style={{ color: "var(--ink-soft)" }}>
+            <a href="#menu" className="hover:underline">Menu</a>
+            <a href="#features" className="hover:underline">Features</a>
+          </nav>
+          <button onClick={scrollToAuth} className="btn-primary px-5 py-2 text-sm">Sign in</button>
+        </div>
+      </header>
+
+      <section className="px-6 py-14 sm:py-24">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-14 items-center">
+          <div className="space-y-6">
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.4rem] font-800" style={{ lineHeight: 1.08, textWrap: "balance" }}>
+              Order before class.<br />Pick up when you're free.
+            </h1>
+            <p className="max-w-md text-base" style={{ color: "var(--ink-soft)" }}>
+              ক্যাম্পাস ডাইনিংয়ে আনুন স্বাচ্ছন্দ্য। ডিজিটাল টোকেন ও স্মার্ট ওয়ালেটের মাধ্যমে লাইন ছাড়া নিন আপনার পছন্দের খাবার।
+            </p>
+            <div className="flex flex-wrap gap-4 pt-2">
+              <button onClick={scrollToAuth} className="btn-primary hero-cta px-7 py-3 text-base">Get started</button>
+              <a href="#menu" className="btn-gold px-7 py-3 text-base inline-block">See popular meals</a>
+            </div>
+          </div>
+          <div className="ticket p-6 w-full max-w-sm justify-self-center md:justify-self-end" style={{ transform: "rotate(-2deg)" }} aria-hidden="true">
+            <div className="flex justify-between items-start gap-4">
+              <div className="perf pl-4">
+                <div className="text-sm font-600">Your token</div>
+                <div className="font-display text-4xl font-800">9F3A12BC</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-600">Pickup</div>
+                <div className="font-display text-2xl font-800">1:10 pm</div>
+              </div>
+            </div>
+            <div className="mt-5 pt-4 text-sm space-y-1" style={{ borderTop: "2px dashed var(--ink)" }}>
+              <div className="flex justify-between"><span>Khichuri × 1</span><span className="font-mono">৳60</span></div>
+              <div className="flex justify-between"><span>Cha × 1</span><span className="font-mono">৳8</span></div>
+              <div className="flex justify-between font-700 pt-1"><span>Total</span><span className="font-mono">৳68</span></div>
+            </div>
+            <div className="mt-4 inline-flex items-center gap-2 text-xs font-700 px-3 py-1 rounded-full bg-white" style={{ border: "2px solid var(--ink)" }}>
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--leaf)" }}></span> Quiet time slot
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" className="border-y py-12 px-6 bg-white">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          {features.map((f, i) => (
+            <div key={i} className="flex gap-4">
+              <span className="feature-mark"></span>
+              <div>
+                <h4 className="font-display font-700 text-base">{f.title}</h4>
+                <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>{f.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="menu" className="px-6 py-20 w-full">
+        <div className="max-w-6xl mx-auto">
+        <h2 className="font-display text-3xl font-800 mb-8">Popular this week</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {sampleMenu.map((item, idx) => (
+            <div key={idx} className="card overflow-hidden">
+              <div className="h-44 overflow-hidden" style={{ background: "var(--ink-tint)" }}>
+                <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="p-5">
+                <div className="font-display font-700 text-base">{item.name}</div>
+                <div className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>{item.bn}</div>
+                <div className="font-display text-lg font-800 mt-3">{item.price}</div>
+              </div>
+            </div>
+          ))}
+          <div className="card p-6 flex flex-col items-center justify-center text-center space-y-3 border-dashed">
+            <Icon path={I.menu} className="w-8 h-8" />
+            <div className="font-display font-700 text-base">Full menu inside</div>
+            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>লগইন করে রিয়েল-টাইম স্টক এবং খাবার অর্ডার করুন।</p>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <section ref={authRef} className="py-20 px-6 border-t" style={{ borderColor: "var(--line)" }}>
+        <div className="max-w-md mx-auto">
+          <div className="mb-8">
+            <h2 className="font-display text-3xl font-800">Sign in</h2>
+            <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>Choose how you use CampusDine.</p>
+          </div>
+
+          <div className="card p-8 fade-in">
+            {!role ? (
+              <div className="space-y-3.5">
+                {roles.map((r) => (
+                  <button key={r.key} onClick={() => setRole(r.key)}
+                    className="w-full flex items-center gap-4 p-4 rounded-lg border text-left transition-all hover:border-amber-400 group"
+                    style={{ borderColor: "var(--panel-border)", background: "rgba(255, 255, 255, 0.72)" }}>
+                    <div className="w-11 h-11 rounded-lg grid place-items-center shrink-0 logo-badge">
+                      <Icon path={r.icon} className="w-5 h-5" style={{ color: "var(--gold)" }} />
+                    </div>
+                    <div>
+                      <div className="font-display font-700 text-sm group-hover:text-amber-300">{r.label}</div>
+                      <div className="text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>{r.desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : mode === "forgot" ? (
+              <div className="space-y-4">
+                <button onClick={() => { setMode("login"); setError(null); }} className="text-xs mb-2 flex items-center gap-1.5" style={{ color: "var(--ink-soft)" }}>
+                  <Icon path={I.arrow} className="w-3.5 h-3.5 rotate-180" /> Back to login
+                </button>
+                <div className="font-display font-700 text-lg text-center" style={{ color: "var(--gold-bright)" }}>Reset Password</div>
+                <input value={externalId} onChange={e => setExternalId(e.target.value)} placeholder="User ID"
+                       className="w-full px-4 py-3 rounded-lg border text-sm" style={{ borderColor: "var(--panel-border)" }} />
+                  <input value={otp} onChange={e => setOtp(e.target.value)} placeholder="OTP"
+                    className="w-full px-4 py-3 rounded-lg border text-sm" style={{ borderColor: "var(--panel-border)" }} />
+                <input value={newPassword} onChange={e => setNewPassword(e.target.value)} type="password" placeholder="New Password"
+                       className="w-full px-4 py-3 rounded-lg border text-sm" style={{ borderColor: "var(--panel-border)" }} />
+                {error && <p className="text-xs text-red-400">{error}</p>}
+                  <div className="flex gap-2">
+                    <button disabled={busy} onClick={requestReset} className="flex-1 py-3 rounded-lg border border-amber-400/30 text-xs">Request OTP</button>
+                    <button disabled={busy} onClick={submitReset} className="btn-primary flex-1 py-3 rounded-lg text-xs">Verify & Reset</button>
+                  </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <button onClick={() => { setRole(null); setError(null); }} className="text-xs flex items-center gap-1.5" style={{ color: "var(--ink-soft)" }}>
+                  <Icon path={I.arrow} className="w-3.5 h-3.5 rotate-180" /> Change Role
+                </button>
+                <div className="font-display font-700 text-lg text-center" style={{ color: "var(--gold-bright)" }}>
+                  {roles.find(r => r.key === role)?.label} Access
+                </div>
+
+                <div className="flex p-1 rounded-full border mb-4" style={{ background: "var(--bg)", borderColor: "var(--panel-border)" }}>
+                  <button onClick={() => setMode("login")} className={`flex-1 py-2 rounded-full text-xs font-display font-700 ${mode === "login" ? "bg-amber-400 text-slate-950" : "text-gray-400"}`}>Log In</button>
+                  <button onClick={() => setMode("register")} className={`flex-1 py-2 rounded-full text-xs font-display font-700 ${mode === "register" ? "bg-amber-400 text-slate-950" : "text-gray-400"}`}>Register</button>
+                </div>
+
+                {mode === "register" && (
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Full Name"
+                         className="w-full px-4 py-3 rounded-lg border text-sm" style={{ borderColor: "var(--panel-border)" }} />
+                )}
+                <input value={externalId} onChange={e => setExternalId(e.target.value)} placeholder="ID Number"
+                       className="w-full px-4 py-3 rounded-lg border text-sm" style={{ borderColor: "var(--panel-border)" }} />
+                <div>
+                  <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Password"
+                         className="w-full px-4 py-3 rounded-lg border text-sm" style={{ borderColor: "var(--panel-border)" }} />
+                  {mode === "login" && (
+                    <button onClick={() => { setMode("forgot"); setError(null); }} className="text-xs mt-2 text-amber-400">
+                      Forgot Password?
+                    </button>
+                  )}
+                </div>
+
+                {error && <p className="text-xs text-red-400">{error}</p>}
+                {resetMsg && <p className="text-xs text-emerald-400">{resetMsg}</p>}
+
+                <button disabled={busy} onClick={submit} className="btn-primary w-full py-3 rounded-lg text-xs">
+                  {busy ? "Authenticating..." : mode === "login" ? "Enter Portal" : "Create Account & Enter"}
+                </button>
+
+                <div className="pt-2 text-center">
+                  <button onClick={() => setShowAdvanced(!showAdvanced)} className="text-[11px] flex items-center justify-center gap-1 mx-auto text-gray-400">
+                    <Icon path={I.plug} className="w-3.5 h-3.5" /> Backend Server Host
+                  </button>
+                  {showAdvanced && (
+                    <input value={apiBase} onChange={e => setApiBase(e.target.value)}
+                           className="w-full mt-2 px-3 py-2 rounded-md border text-xs font-mono" style={{ borderColor: "var(--panel-border)" }} />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t py-10 px-6 bg-white" style={{ borderColor: "var(--line)" }}>
+        <p className="text-center text-sm text-gray-400">
+          &copy; 2026 CampusDine — CSE Software Project
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+/* ---------------- Top Navbar ---------------- */
+function TopBar({ role, name, tabs, active, setActive, onLogout, connected, notifs, onReadNotifs, lang, toggleLang }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="topbar sticky top-0 z-20">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="logo-badge w-9 h-9 grid place-items-center">
+            <Icon path={I.ticket} className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-display font-800 text-lg leading-none block text-white">CampusDine</span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: connected ? "var(--leaf)" : "var(--brick)" }}></span>
+              <span className="text-[10px]" style={{ color: "var(--ink-soft)" }}>{connected ? "Live System" : "Offline"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-1.5 flex-wrap">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setActive(t.key)}
+                    className={`tab-btn px-4 py-2 rounded-lg text-xs flex items-center gap-2 ${active === t.key ? "active" : ""}`}>
+              <Icon path={t.icon} className="w-3.5 h-3.5" /> {tr(t.label)}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button onClick={toggleLang} title="English / বাংলা" className="px-2.5 py-1.5 rounded-lg border text-[11px] font-700" style={{ borderColor: "var(--panel-border)" }}>{lang === "bn" ? "EN" : "বাং"}</button>
+          {notifs && (
+            <div className="relative">
+              <button onClick={() => { const next = !open; setOpen(next); if (next && notifs.unread > 0) onReadNotifs(); }} title="Notifications" className="p-2 rounded-lg border relative" style={{ borderColor: "var(--panel-border)" }}>
+                <Icon path={I.bell} className="w-4 h-4" />
+                {notifs.unread > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] grid place-items-center">{notifs.unread}</span>}
+              </button>
+              {open && (
+                <div className="absolute right-0 mt-2 w-72 max-h-80 overflow-auto rounded-xl border shadow-lg z-40" style={{ background: "#fff", borderColor: "var(--panel-border)" }}>
+                  {notifs.list.length === 0 ? <p className="text-xs p-4" style={{ color: "var(--ink-soft)" }}>No notifications yet.</p> : notifs.list.map(n => (
+                    <div key={n.id} className="p-3 text-xs border-b" style={{ borderColor: "var(--panel-border)" }}>
+                      <div>{n.message}</div>
+                      <div className="text-[10px] mt-1" style={{ color: "var(--ink-soft)" }}>{new Date(n.sent_at).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="text-right hidden sm:block">
+            <div className="text-xs font-700 leading-tight">{name}</div>
+            <div className="text-[10px] capitalize font-mono mt-0.5 text-amber-400">{role}</div>
+          </div>
+          <button onClick={onLogout} title="Log Out" className="p-2 rounded-lg border border-red-900/40 hover:border-red-500 transition-colors">
+            <Icon path={I.logout} className="w-4 h-4 text-red-400" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Menu & Order Tab ---------------- */
+function MenuOrder({ menu, cart, setCart, placeOrder, walletBalance, busy, favorites, toggleFavorite, call, receivingNumber, availableCoupons, refreshMenu }) {
+  const [cat, setCat] = useState("");
+  const [search, setSearch] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [availableOnly, setAvailableOnly] = useState(true);
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState(null);
+  const [couponMessage, setCouponMessage] = useState("");
+  const [dayOffset, setDayOffset] = useState(0);
+  const mealDate = isoDay(dayOffset);
+  const [slotData, setSlotData] = useState(null);
+  const [slot, setSlot] = useState("");
+  const [suggest, setSuggest] = useState(null);
+  const [veg, setVeg] = useState(false);
+  const [noNuts, setNoNuts] = useState(false);
+  const [mild, setMild] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [impact, setImpact] = useState(null);
+  const [budget, setBudget] = useState(null);
+  useEffect(() => {
+    if (refreshMenu) refreshMenu();
+    call("/api/rewards/impact").then(setImpact).catch(() => {});
+    call("/api/budget").then(setBudget).catch(() => {});
+  }, []);
+  useEffect(() => {
+    setSlot("");
+    call(`/api/slots?date=${mealDate}`).then(setSlotData).catch(() => setSlotData(null));
+    call(`/api/schedule/suggest?date=${mealDate}`).then(setSuggest).catch(() => setSuggest(null));
+  }, [mealDate]);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const listen = () => {
+    if (!SR) return;
+    const r = new SR(); r.lang = LANG === "bn" ? "bn-BD" : "en-US"; r.interimResults = false;
+    r.onstart = () => setListening(true); r.onend = () => setListening(false); r.onerror = () => setListening(false);
+    r.onresult = (e) => setSearch(String(e.results[0][0].transcript || "").replace(/[.।]$/, ""));
+    r.start();
+  };
+  // Last-hour deals only apply to today's meals; the server re-checks the price when the order is placed.
+  const priceOf = (i) => { const m = menu.find(x => x.id === i.id) || i; return mealDate === isoDay(0) && m.surplus_price != null ? m.surplus_price : m.price; };
+  const dealItems = mealDate === isoDay(0) ? menu.filter(m => m.surplus_active) : [];
+  const filtered = menu.filter(i => (!veg || i.is_veg) && (!noNuts || !i.has_nuts) && (!mild || i.spice_level <= 1) && (!cat || i.category === cat) && (!search || `${i.name} ${i.bn || ""} ${i.description || ""}`.toLowerCase().includes(search.toLowerCase())) && (!minPrice || Number(i.price) >= Number(minPrice)) && (!maxPrice || Number(i.price) <= Number(maxPrice)) && (!availableOnly || i.stock > 0));
+  const [payMethod, setPayMethod] = useState("wallet");
+
+  const add = (item) => setCart(prev => {
+    const existing = prev.find(p => p.id === item.id);
+    if (existing) return prev.map(p => p.id === item.id ? { ...p, qty: Math.min(p.qty + 1, item.stock ?? 20, 20) } : p);
+    return [...prev, { ...item, qty: 1 }];
+  });
+  const dec = (item) => setCart(prev => prev.map(p => p.id === item.id ? { ...p, qty: p.qty - 1 } : p).filter(p => p.qty > 0));
+
+  const subtotal = cart.reduce((s, i) => s + priceOf(i) * i.qty, 0);
+  const total = Math.max(0, subtotal - Number(coupon?.discountAmount || 0));
+  const canPay = payMethod !== "wallet" || walletBalance >= total;
+  const hasIftar = cart.some(c => (menu.find(m => m.id === c.id) || c).iftar_only);
+  const slotKind = slotData && slotData.slots.find(s => s.time === slot)?.kind;
+  const iftarBlock = hasIftar && slotKind !== "iftar";
+  const projected = budget && budget.limit ? budget.spent + total : null;
+  // A validated coupon is only valid for the cart it was checked against.
+  useEffect(() => { setCoupon(null); setCouponMessage(""); }, [subtotal]);
+  const validateCoupon = async () => {
+    if (!couponCode) return;
+    try { const data = await call("/api/coupons/validate", { method: "POST", body: { couponCode, orderAmount: subtotal } }); setCoupon(data); setCouponMessage(`Discount applied: ${taka(data.discountAmount)}`); }
+    catch (e) { setCoupon(null); setCouponMessage(e.message); }
+  };
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={tr("Search meals")} className="px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+          <input type="number" min="0" value={minPrice} onChange={e => setMinPrice(e.target.value)} placeholder="Min price" className="px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+          <input type="number" min="0" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="Max price" className="px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+          <label className="flex items-center gap-2 px-3 text-xs"><input type="checkbox" checked={availableOnly} onChange={e => setAvailableOnly(e.target.checked)} /> {tr("Available only")}</label>
+        </div>
+        <div className="card p-4 mb-4">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <span className="text-xs font-700">📅 {tr("When do you want to eat?")}</span>
+            <DayPicker value={dayOffset} onChange={setDayOffset} />
+            <span className="text-[11px] text-gray-400">{slot ? `${tr("Pickup")} ${slot}` : tr("No pickup time chosen")}</span>
+          </div>
+          {suggest && suggest.suggestedSlot && slot !== suggest.suggestedSlot && <div className="note note-ok flex items-center gap-2 text-[11px] mb-2 p-2">📚 {suggest.message} <button onClick={() => setSlot(suggest.suggestedSlot)} className="px-2 py-0.5 rounded border border-emerald-600 font-700">Use {suggest.suggestedSlot}</button></div>}
+          <SlotPicker data={slotData} value={slot} onChange={setSlot} />
+        </div>
+        <div className="flex gap-2 mb-4 flex-wrap text-[11px]">
+          {[[veg, setVeg, "🟢 " + tr("Vegetarian")], [noNuts, setNoNuts, "🥜 " + tr("No nuts")], [mild, setMild, "🌶 " + tr("Mild (not spicy)")]].map(([on, set, label]) => <button key={label} onClick={() => set(!on)} className={`px-3 py-1.5 rounded-full border ${on ? "bg-amber-400 text-slate-950 font-700" : "border-amber-400/30"}`}>{label}</button>)}
+          {SR && <button onClick={listen} className={`px-3 py-1.5 rounded-full border ${listening ? "bg-red-500 text-white" : "border-amber-400/30"}`}>🎤 {listening ? tr("Listening…") : tr("Voice search")}</button>}
+        </div>
+        {dealItems.length > 0 && <div className="note note-warn p-3 mb-4 text-xs">⏰ <b>{tr("Last-hour deal")}!</b> {dealItems.length} item{dealItems.length > 1 ? "s" : ""} discounted until closing — prices below already include it.</div>}
+        {impact && impact.mealsSaved > 0 && <div className="text-[11px] text-gray-400 mb-3">🌱 {impact.mealsSaved} {tr("meals saved from waste")}</div>}
+        <div className="flex gap-2 mb-5 flex-wrap">
+          <button onClick={() => setCat("")} className={`tab-btn px-4 py-2 rounded-full text-xs ${!cat ? "active" : ""}`}>{tr("All")}</button>
+          {CATEGORIES.map(c => (
+            <button key={c.id} onClick={() => setCat(c.id)} className={`tab-btn px-4 py-2 rounded-full text-xs ${cat === c.id ? "active" : ""}`}>
+              {tr(c.label)}
+            </button>
+          ))}
+        </div>
+        {favorites.length > 0 && <div className="card p-3 mb-5 text-xs"><span className="text-amber-300 font-700">Favorites:</span> {favorites.map(item => <button key={item.id} disabled={item.stock <= 0} onClick={() => add(item)} className="ml-2 text-gray-300 hover:text-amber-300 disabled:opacity-40 disabled:line-through">{item.name}</button>)}</div>}
+        <div className="grid sm:grid-cols-2 gap-4">
+          {filtered.map(item => {
+            const out = item.stock <= 0;
+            const inCart = cart.find(c => c.id === item.id);
+            const isFavorite = favorites.some(f => f.id === item.id);
+            return (
+              <div key={item.id} className={`card p-4 flex flex-col justify-between ${out ? "opacity-40" : ""}`}>
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-display font-700 text-amber-300">{item.name}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{item.bn}</div>
+                      <DietTags item={item} />
+                      {item.rating_count > 0 && <div className="text-[11px] text-amber-500 mt-0.5">★ {item.avg_rating} <span className="text-gray-400">({item.rating_count})</span></div>}
+                      {!out && item.stock <= LOW_STOCK_THRESHOLD && <div className="text-[10px] text-red-400 mt-0.5">Only {item.stock} left</div>}
+                    </div>
+                    <button onClick={() => toggleFavorite(item)} title={isFavorite ? "Remove favorite" : "Add favorite"} className={`text-lg ${isFavorite ? "text-amber-300" : "text-gray-500"}`}>★</button>
+                    {item.tag && !out && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-700">{item.tag}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="font-mono font-700 text-lg">{mealDate === isoDay(0) && item.surplus_price != null ? <><span className="text-xs line-through text-gray-400 mr-1">{taka(item.price)}</span><span style={{ color: "#D92D20" }}>{taka(item.surplus_price)}</span></> : taka(item.price)}</span>
+                  {out ? (
+                    <span className="text-xs text-red-400 font-600">{tr("Stock Out")}</span>
+                  ) : inCart ? (
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => dec(item)} className="w-7 h-7 rounded-full grid place-items-center border border-amber-400/30"><Icon path={I.minus} className="w-3.5 h-3.5" /></button>
+                      <span className="font-mono w-5 text-center text-sm">{inCart.qty}</span>
+                      <button onClick={() => add(item)} className="w-7 h-7 rounded-full grid place-items-center bg-amber-400 text-slate-950"><Icon path={I.plus} className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button onClick={() => add(item)} className="btn-primary px-4 py-1.5 rounded-md text-xs">{tr("Add")}</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="card p-5 sticky top-20">
+          <div className="font-display font-700 flex items-center gap-2 mb-4 text-amber-300">
+            <Icon path={I.cart} className="w-5 h-5" /> {tr("Cart Summary")}
+          </div>
+          {cart.length === 0 ? (
+            <p className="text-xs text-gray-400">কার্ট খালি — মেনু থেকে খাবার পছন্দ করুন।</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {cart.map(i => (
+                <div key={i.id} className="flex justify-between text-xs">
+                  <span>{i.name} × {i.qty}</span>
+                  <span className="font-mono">{taka(priceOf(i) * i.qty)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {cart.length > 0 && <div className="text-[11px] text-gray-400 mb-2">📅 {dayText(dayOffset)} · {slot ? `${tr("Pickup")} ${slot}` : tr("No pickup time chosen")}</div>}
+          <div className="border-t border-amber-400/20 pt-3 mb-4">
+            <div className="flex justify-between font-700 text-sm">
+              <span>{tr("Total Amount")}</span>
+              <span className="font-mono text-amber-300">{taka(total)}</span>
+            </div>
+            {coupon && <div className="text-[11px] text-green-300 mt-1">Coupon discount: -{taka(coupon.discountAmount)}</div>}
+            {projected != null && cart.length > 0 && <div className={`text-[11px] mt-1 ${projected > budget.limit ? "text-red-400" : "text-gray-400"}`}>{projected > budget.limit ? `⚠ Over your weekly budget by ${taka(projected - budget.limit)}` : `💰 ${taka(budget.limit - projected)} left in your weekly budget`}</div>}
+          </div>
+          {cart.length > 0 && (
+            <>
+              <div className="flex gap-2 mb-3">
+                <input value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} placeholder="Coupon code" className="flex-1 px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+                <button onClick={validateCoupon} className="px-3 rounded-lg border border-amber-400/30 text-xs">Apply</button>
+              </div>
+              {availableCoupons.length > 0 && <div className="note note-warn mb-3 p-3"><div className="text-[10px] uppercase tracking-wider font-700 mb-2" style={{ color: "#8A5B00" }}>Available offers</div><div className="flex flex-wrap gap-2">{availableCoupons.map(offer => <button key={offer.id} onClick={() => setCouponCode(offer.code)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-700" style={{ background: "#fff", color: "#101B2D", border: "1.5px dashed #101B2D" }}>{offer.code} <span className="font-sans">{offer.discount_type === "PERCENTAGE" ? `${offer.discount_value}% off` : `${taka(offer.discount_value)} off`}</span></button>)}</div></div>}
+              {couponMessage && <p className="text-[11px] text-gray-400 mb-3">{couponMessage}</p>}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 text-xs">
+                <button onClick={() => setPayMethod("wallet")} className={`flex-1 py-2 rounded-lg border ${payMethod === "wallet" ? "bg-amber-400 text-slate-950 font-700" : "border-amber-400/20"}`}>
+                  Wallet
+                </button>
+                <button onClick={() => setPayMethod("cash")} className={`flex-1 py-2 rounded-lg border ${payMethod === "cash" ? "bg-amber-400 text-slate-950 font-700" : "border-amber-400/20"}`}>
+                  Cash
+                </button>
+                {[['bkash', 'bKash'], ['nagad', 'Nagad']].map(([key, label]) => <button key={key} onClick={() => setPayMethod(key)} className={`py-2 rounded-lg border ${payMethod === key ? "bg-amber-400 text-slate-950 font-700" : "border-amber-400/20"}`}>{label}</button>)}
+              </div>
+              {payMethod !== "wallet" && payMethod !== "cash" && <p className="text-[11px] text-amber-300 mb-3">Send payment to {receivingNumber || "the configured receiving number"}. Payment initiation starts after order creation.</p>}
+              {payMethod === "wallet" && !canPay && (
+                <p className="text-[11px] text-red-400 mb-3">পর্যাপ্ত ব্যালেন্স নেই, ওয়ালেট রিচার্জ করুন।</p>
+              )}
+              {iftarBlock && <p className="text-[11px] mb-3" style={{ color: "#3F2E8C" }}>🌙 Iftar items need an iftar pickup slot — choose one above.</p>}
+              <button disabled={!canPay || busy || iftarBlock} onClick={() => placeOrder(cart, payMethod, coupon, total, { pickupSlot: slot || null, mealDate })} className="btn-primary w-full py-2.5 rounded-lg text-xs">
+                {busy ? "Placing Order..." : tr("Confirm & Get Token")}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Track Order Tab ---------------- */
+/* ---------------- Friends: group orders + treats ---------------- */
+function TreatSection({ call, menu, showError, refreshWallet }) {
+  const [toId, setToId] = useState("");
+  const [friend, setFriend] = useState("");
+  const [kind, setKind] = useState("credit");
+  const [amount, setAmount] = useState("");
+  const [itemId, setItemId] = useState("");
+  const [qty, setQty] = useState(1);
+  const [dayOffset, setDayOffset] = useState(0);
+  const [slot, setSlot] = useState("");
+  const [slotData, setSlotData] = useState(null);
+  const [message, setMessage] = useState("");
+  const [info, setInfo] = useState("");
+  const [history, setHistory] = useState({ sent: [], received: [] });
+  const loadHistory = () => call("/api/treats").then(setHistory).catch(() => {});
+  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => { if (kind === "meal") call(`/api/slots?date=${isoDay(dayOffset)}`).then(setSlotData).catch(() => setSlotData(null)); setSlot(""); }, [kind, dayOffset]);
+  const lookup = async () => { setFriend(""); if (!toId.trim()) return; try { const d = await call(`/api/treats/lookup?externalId=${encodeURIComponent(toId.trim())}`); setFriend(d.name); } catch (e) { setFriend(""); setInfo(e.message); } };
+  const send = async () => {
+    setInfo("");
+    try {
+      const body = { toExternalId: toId.trim(), kind, message };
+      if (kind === "credit") body.amount = Number(amount); else { body.menuItemId = Number(itemId); body.qty = Number(qty); body.mealDate = isoDay(dayOffset); if (slot) body.pickupSlot = slot; }
+      const r = await call("/api/treats", { method: "POST", body });
+      setInfo(`✅ ${r.message}`); setAmount(""); setMessage(""); await Promise.all([refreshWallet(), loadHistory()]);
+    } catch (e) { showError(e); }
+  };
+  return (
+    <div className="card p-5">
+      <div className="font-display font-700 text-amber-300 mb-3">🎁 {tr("Treat a friend")}</div>
+      <div className="grid sm:grid-cols-2 gap-2 mb-3">
+        <div className="flex gap-2"><input value={toId} onChange={e => { setToId(e.target.value); setFriend(""); }} onBlur={lookup} placeholder={tr("Friend's ID")} className={`${inputCls} flex-1`} style={inputStyle} /><button onClick={lookup} className="px-3 rounded-lg border border-amber-400/30 text-xs">Check</button></div>
+        <div className="text-xs self-center">{friend ? <span className="text-emerald-600">✓ {friend}</span> : <span className="text-gray-400">{info}</span>}</div>
+      </div>
+      <div className="flex gap-2 mb-3 text-xs">
+        {[["credit", tr("Send credit")], ["meal", tr("Buy a meal")]].map(([k, label]) => <button key={k} onClick={() => setKind(k)} className={`tab-btn px-4 py-2 rounded-full ${kind === k ? "active" : ""}`}>{label}</button>)}
+      </div>
+      {kind === "credit" ? (
+        <input type="number" min="1" max="1000" value={amount} onChange={e => setAmount(e.target.value)} placeholder="৳ Amount" className={`${inputCls} w-40 mb-3`} style={inputStyle} />
+      ) : (
+        <div className="space-y-2 mb-3">
+          <div className="flex gap-2 flex-wrap">
+            <select value={itemId} onChange={e => setItemId(e.target.value)} className={inputCls} style={inputStyle}><option value="">Choose item…</option>{menu.filter(m => m.stock > 0).map(m => <option key={m.id} value={m.id}>{m.name} · {taka(m.price)}</option>)}</select>
+            <input type="number" min="1" max="5" value={qty} onChange={e => setQty(e.target.value)} className={`${inputCls} w-20`} style={inputStyle} />
+            <DayPicker value={dayOffset} onChange={setDayOffset} />
+          </div>
+          <SlotPicker data={slotData} value={slot} onChange={setSlot} />
+        </div>
+      )}
+      <div className="flex gap-2 flex-wrap">
+        <input value={message} maxLength={140} onChange={e => setMessage(e.target.value)} placeholder={tr("Message")} className={`${inputCls} flex-1 min-w-[10rem]`} style={inputStyle} />
+        <button onClick={send} disabled={!toId || (kind === "credit" ? !amount : !itemId)} className="btn-primary px-5 py-2 rounded-lg text-xs">{tr("Send")}</button>
+      </div>
+      {info && friend && <p className="text-[11px] mt-2 text-emerald-600">{info}</p>}
+      {(history.sent.length > 0 || history.received.length > 0) && (
+        <div className="grid sm:grid-cols-2 gap-4 mt-4 text-[11px]">
+          <div><div className="font-700 mb-1">Sent</div>{history.sent.slice(0, 5).map(t => <div key={t.id} className="text-gray-400">{t.kind === "credit" ? `৳${t.amount}` : "🍽 meal"} → {t.other}</div>)}</div>
+          <div><div className="font-700 mb-1">Received</div>{history.received.slice(0, 5).map(t => <div key={t.id} className="text-gray-400">{t.kind === "credit" ? `৳${t.amount}` : "🍽 meal"} ← {t.other}{t.message ? ` “${t.message}”` : ""}</div>)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GroupSection({ call, menu, me, showError, refreshWallet, refreshOrders }) {
+  const [groups, setGroups] = useState([]);
+  const [group, setGroup] = useState(null);
+  const [joinCode, setJoinCode] = useState("");
+  const [form, setForm] = useState({ name: "", splitMode: "equal", dayOffset: 0, slot: "" });
+  const [slotData, setSlotData] = useState(null);
+  const [pick, setPick] = useState({ id: "", qty: 1 });
+  const loadList = () => call("/api/groups/mine").then(d => setGroups(d.groups)).catch(() => {});
+  useEffect(() => { loadList(); }, []);
+  useEffect(() => { setForm(f => ({ ...f, slot: "" })); call(`/api/slots?date=${isoDay(form.dayOffset)}`).then(setSlotData).catch(() => setSlotData(null)); }, [form.dayOffset]);
+  useEffect(() => {
+    if (!group || group.status !== "open") return undefined;
+    const t = setInterval(() => call(`/api/groups/${group.code}`).then(setGroup).catch(() => {}), 4000);
+    return () => clearInterval(t);
+  }, [group && group.code, group && group.status]);
+  const act = async (fn) => { try { await fn(); } catch (e) { showError(e); } };
+  const open = (code) => act(async () => setGroup(await call(`/api/groups/${code}`)));
+  const create = () => act(async () => { setGroup(await call("/api/groups", { method: "POST", body: { name: form.name, splitMode: form.splitMode, mealDate: isoDay(form.dayOffset), pickupSlot: form.slot || undefined } })); setForm(f => ({ ...f, name: "" })); loadList(); });
+  const join = () => act(async () => { setGroup(await call("/api/groups/join", { method: "POST", body: { code: joinCode } })); setJoinCode(""); loadList(); });
+  const setQty = (itemId, qty) => act(async () => setGroup(await call(`/api/groups/${group.code}/items`, { method: "PUT", body: { itemId, qty } })));
+  const confirm = (v) => act(async () => setGroup(await call(`/api/groups/${group.code}/confirm`, { method: "POST", body: { confirmed: v } })));
+  const checkout = () => act(async () => { await call(`/api/groups/${group.code}/checkout`, { method: "POST" }); await Promise.all([refreshWallet(), refreshOrders()]); setGroup(await call(`/api/groups/${group.code}`)); loadList(); });
+  const cancelGroup = () => act(async () => { await call(`/api/groups/${group.code}`, { method: "DELETE" }); setGroup(null); loadList(); });
+  const leave = () => act(async () => { await call(`/api/groups/${group.code}/leave`, { method: "POST" }); setGroup(null); loadList(); });
+  const myQty = (id) => (group ? (group.items.find(i => i.userId === me && i.itemId === id) || {}).qty || 0 : 0);
+
+  return (
+    <div className="card p-5">
+      <div className="font-display font-700 text-amber-300 mb-3">👥 {tr("Group orders")}</div>
+      {!group && (
+        <div className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={tr("Group name")} className={`${inputCls} w-full`} style={inputStyle} />
+              <div className="flex gap-2 flex-wrap">
+                <DayPicker value={form.dayOffset} onChange={o => setForm({ ...form, dayOffset: o })} />
+                <select value={form.splitMode} onChange={e => setForm({ ...form, splitMode: e.target.value })} className={inputCls} style={inputStyle}><option value="equal">{tr("Equal split")}</option><option value="own">{tr("Everyone pays own items")}</option></select>
+              </div>
+              <SlotPicker data={slotData} value={form.slot} onChange={s => setForm({ ...form, slot: s })} />
+              <button onClick={create} disabled={!form.name.trim()} className="btn-primary px-4 py-2 rounded-lg text-xs">{tr("Create group")}</button>
+            </div>
+            <div className="space-y-2">
+              <div className="flex gap-2"><input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} maxLength={8} placeholder={tr("Group code")} className={`${inputCls} flex-1 font-mono`} style={inputStyle} /><button onClick={join} disabled={joinCode.length < 4} className="px-4 rounded-lg border border-amber-400/40 text-xs">{tr("Join")}</button></div>
+              {groups.length > 0 && <div className="text-[11px] space-y-1 pt-2">{groups.map(g => <button key={g.code} onClick={() => open(g.code)} className="block w-full text-left p-2 rounded-lg border border-amber-400/20 hover:border-amber-400"><b>{g.name}</b> · <span className="font-mono">{g.code}</span> · {g.members} 👤 · {String(g.meal_date).slice(0, 10)}{g.pickup_slot ? ` ${g.pickup_slot}` : ""} · <span className={g.status === "open" ? "text-emerald-600" : "text-gray-400"}>{g.status}</span></button>)}</div>}
+            </div>
+          </div>
+        </div>
+      )}
+      {group && (
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div><div className="font-700">{group.name} <span className={`text-[10px] px-2 py-0.5 rounded-full ${group.status === "open" ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-600"}`}>{group.status}</span></div>
+              <div className="text-[11px] text-gray-400">{group.mealDate}{group.pickupSlot ? ` · ${tr("Pickup")} ${group.pickupSlot}` : ""} · {group.splitMode === "equal" ? tr("Equal split") : tr("Everyone pays own items")} · host {group.host.name}</div></div>
+            <div className="text-right"><div className="text-[10px] text-gray-400">{tr("Group code")}</div><div className="font-mono text-xl font-800 tracking-widest text-amber-300">{group.code}</div></div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <div className="text-[11px] font-700 mb-1">Members</div>
+              {group.members.map(m => <div key={m.userId} className="flex justify-between text-xs py-1 border-b border-amber-400/10"><span>{m.confirmed ? "✅" : "⏳"} {m.name}{m.isHost ? " 👑" : ""}</span><span className="font-mono">{taka(m.share)}</span></div>)}
+              <div className="flex justify-between text-sm font-700 pt-2"><span>Total</span><span className="font-mono text-amber-300">{taka(group.total)}</span></div>
+            </div>
+            <div>
+              <div className="text-[11px] font-700 mb-1">Cart</div>
+              {group.items.length === 0 && <p className="text-xs text-gray-400">Nobody has added food yet.</p>}
+              {group.items.map(i => <div key={`${i.userId}-${i.itemId}`} className="flex justify-between items-center text-xs py-1 border-b border-amber-400/10"><span>{i.name} × {i.qty} <span className="text-gray-400">({i.userName})</span></span>
+                <span className="flex items-center gap-1">{group.status === "open" && i.userId === me && <><button onClick={() => setQty(i.itemId, i.qty - 1)} className="w-5 h-5 rounded-full border border-amber-400/30">−</button><button onClick={() => setQty(i.itemId, i.qty + 1)} className="w-5 h-5 rounded-full border border-amber-400/30">+</button></>}<span className="font-mono w-12 text-right">{taka(i.line)}</span></span></div>)}
+              {group.status === "open" && (
+                <div className="flex gap-2 mt-2">
+                  <select value={pick.id} onChange={e => setPick({ ...pick, id: e.target.value })} className={`${inputCls} flex-1`} style={inputStyle}><option value="">Add my item…</option>{menu.filter(m => m.stock > 0).map(m => <option key={m.id} value={m.id}>{m.name} · {taka(m.price)}</option>)}</select>
+                  <input type="number" min="1" max="20" value={pick.qty} onChange={e => setPick({ ...pick, qty: e.target.value })} className={`${inputCls} w-16`} style={inputStyle} />
+                  <button disabled={!pick.id} onClick={() => setQty(Number(pick.id), myQty(Number(pick.id)) + Number(pick.qty))} className="px-3 rounded-lg border border-amber-400/40 text-xs">{tr("Add")}</button>
+                </div>
+              )}
+            </div>
+          </div>
+          {group.status === "open" ? (
+            <div className="flex gap-2 flex-wrap items-center">
+              <button onClick={() => confirm(!group.myConfirmed)} disabled={group.items.length === 0} className={`px-4 py-2 rounded-lg text-xs ${group.myConfirmed ? "border border-emerald-500 text-emerald-700" : "btn-primary"}`}>{group.myConfirmed ? "✅ Confirmed (tap to undo)" : tr("Confirm")}</button>
+              {group.isHost ? <><button onClick={checkout} disabled={!group.allConfirmed || group.items.length === 0} className="btn-primary px-4 py-2 rounded-lg text-xs">{tr("Place group order")}</button><button onClick={cancelGroup} className="px-3 py-2 rounded-lg border border-red-500/40 text-red-400 text-xs">Cancel group</button></> : <button onClick={leave} className="px-3 py-2 rounded-lg border border-red-500/40 text-red-400 text-xs">Leave</button>}
+              <span className="text-[11px] text-gray-400">{group.isHost ? (group.allConfirmed ? "Everyone confirmed — you can place the order." : "Waiting for everyone to confirm. Any cart change resets confirmations.") : "Payment happens when the host places the order."}</span>
+            </div>
+          ) : <p className="text-xs text-emerald-600">{group.status === "placed" ? "✅ Order placed — follow it in Track Order." : "This group was cancelled."}</p>}
+          <button onClick={() => { setGroup(null); loadList(); }} className="text-[11px] text-gray-400 underline">← Back to groups</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FriendsTab({ call, menu, me, showError, refreshWallet, refreshOrders }) {
+  return <div className="space-y-6 max-w-3xl mx-auto"><GroupSection call={call} menu={menu} me={me} showError={showError} refreshWallet={refreshWallet} refreshOrders={refreshOrders} /><TreatSection call={call} menu={menu} showError={showError} refreshWallet={refreshWallet} /></div>;
+}
+
+/* ---------------- Class routine ---------------- */
+function ClassRoutine({ call, showError }) {
+  const [classes, setClasses] = useState([]);
+  const [form, setForm] = useState({ weekday: 0, start: "09:00", end: "10:30", title: "" });
+  const load = () => call("/api/schedule").then(d => setClasses(d.classes)).catch(() => {});
+  useEffect(() => { load(); }, []);
+  const add = async () => { try { await call("/api/schedule", { method: "POST", body: form }); setForm({ ...form, title: "" }); load(); } catch (e) { showError(e); } };
+  const del = async (id) => { try { await call(`/api/schedule/${id}`, { method: "DELETE" }); load(); } catch (e) { showError(e); } };
+  return (
+    <div className="card p-5 mt-6">
+      <div className="font-display font-700 text-amber-300 mb-1">📚 {tr("Class routine")}</div>
+      <p className="text-[11px] text-gray-400 mb-3">Save your lectures once — the menu will suggest a pickup time when you're free and warn you about clashes.</p>
+      <div className="flex gap-2 flex-wrap mb-4">
+        <select value={form.weekday} onChange={e => setForm({ ...form, weekday: Number(e.target.value) })} className={inputCls} style={inputStyle}>{WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select>
+        <input type="time" value={form.start} onChange={e => setForm({ ...form, start: e.target.value })} className={inputCls} style={inputStyle} />
+        <input type="time" value={form.end} onChange={e => setForm({ ...form, end: e.target.value })} className={inputCls} style={inputStyle} />
+        <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Course (e.g. CSE 305)" className={`${inputCls} flex-1 min-w-[8rem]`} style={inputStyle} />
+        <button onClick={add} disabled={!form.title.trim()} className="btn-primary px-4 py-2 rounded-lg text-xs">{tr("Add class")}</button>
+      </div>
+      {classes.length === 0 ? <p className="text-xs text-gray-400">No classes saved yet.</p> : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          {WEEKDAYS.map((d, i) => { const list = classes.filter(c => c.weekday === i); if (!list.length) return null; return (
+            <div key={d} className="p-3 rounded-xl border" style={inputStyle}><div className="text-[11px] font-700 mb-1">{d}</div>{list.map(c => <div key={c.id} className="flex justify-between text-[11px] py-0.5"><span>{c.start_time}–{c.end_time} {c.title}</span><button onClick={() => del(c.id)} className="text-red-400">✕</button></div>)}</div>
+          ); })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- My Stats: rewards, budget, impact ---------------- */
+function MeTab({ call, showError }) {
+  const [rw, setRw] = useState(null);
+  const [bd, setBd] = useState(null);
+  const [impact, setImpact] = useState(null);
+  const [limit, setLimit] = useState("");
+  const [note, setNote] = useState("");
+  const load = () => {
+    call("/api/rewards").then(setRw).catch(() => {});
+    call("/api/budget").then(b => { setBd(b); setLimit(b.limit || ""); }).catch(() => {});
+    call("/api/rewards/impact").then(setImpact).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+  const redeem = async (id) => { try { const r = await call("/api/rewards/redeem", { method: "POST", body: { rewardId: id } }); setNote(`🎉 Coupon ${r.code} (৳${r.discount} off, min ৳${r.minOrder}) is in your offers!`); load(); } catch (e) { showError(e); } };
+  const saveBudget = async () => { try { setBd(await call("/api/budget", { method: "PUT", body: { weeklyBudget: limit === "" ? null : Number(limit) } })); setNote("Budget saved."); } catch (e) { showError(e); } };
+  if (!rw || !bd) return <div className="card p-10 text-center text-xs text-gray-400">Loading…</div>;
+  const pct = bd.limit ? Math.min(100, Math.round((bd.spent / bd.limit) * 100)) : 0;
+  const barColor = !bd.limit ? "#aaa" : pct >= 100 ? "#D92D20" : pct >= 80 ? "#E8701A" : "#168A57";
+  const dmax = Math.max(1, ...bd.daily.map(d => d.spent));
+  const cats = [["heavy", "Heavy"], ["snacks", "Snacks"], ["drinks", "Drinks"]];
+  return (
+    <div className="grid lg:grid-cols-2 gap-6">
+      {note && <div className="lg:col-span-2 p-3 rounded-lg text-xs border border-emerald-400/50 text-emerald-700 bg-emerald-50 flex justify-between">{note}<button onClick={() => setNote("")}>✕</button></div>}
+      <div className="card p-5">
+        <div className="font-display font-700 text-amber-300 mb-3">🔥 {tr("Streak")} & {tr("Points")}</div>
+        <div className="flex gap-6 items-end mb-3">
+          <div><div className="font-mono text-4xl font-800">{rw.streak}</div><div className="text-[11px] text-gray-400">day streak · best {rw.bestStreak}</div></div>
+          <div><div className="font-mono text-4xl font-800 text-amber-300">{rw.points}</div><div className="text-[11px] text-gray-400">{tr("Points")}</div></div>
+        </div>
+        {rw.nextMilestone && <div className="mb-4"><div className="text-[11px] text-gray-400 mb-1">Next milestone: {rw.nextMilestone}-day streak (bonus points)</div><div className="h-2 rounded-full bg-gray-200"><div className="h-2 rounded-full" style={{ width: `${Math.min(100, (rw.streak / rw.nextMilestone) * 100)}%`, background: "var(--taxi)" }}></div></div></div>}
+        <p className="text-[11px] text-gray-400 mb-3">Collect your meal at the counter to earn 10 points (+ streak bonus). Weekends (Fri/Sat) never break a streak.</p>
+        <div className="space-y-2">
+          {rw.rewards.map(r => <div key={r.id} className="flex items-center justify-between text-xs p-2 rounded-lg border" style={inputStyle}><span>৳{r.discount} off coupon <span className="text-gray-400">(min ৳{r.minOrder})</span></span><button disabled={!r.canRedeem} onClick={() => redeem(r.id)} className={`px-3 py-1 rounded-md ${r.canRedeem ? "btn-primary" : "border opacity-50"}`}>{r.cost} pts · {tr("Redeem")}</button></div>)}
+        </div>
+        {rw.coupons.length > 0 && <div className="mt-3 text-[11px]"><b>My coupons:</b> {rw.coupons.map(c => <span key={c.code} className="font-mono mr-2 px-2 py-0.5 rounded bg-amber-100">{c.code} (৳{c.discount_value})</span>)}</div>}
+        {rw.log.length > 0 && <div className="mt-3 text-[11px] text-gray-400 space-y-0.5">{rw.log.slice(0, 5).map((l, i) => <div key={i} className="flex justify-between"><span>{l.reason}</span><span className={l.points > 0 ? "text-emerald-600" : "text-red-400"}>{l.points > 0 ? "+" : ""}{l.points}</span></div>)}</div>}
+      </div>
+      <div className="card p-5">
+        <div className="font-display font-700 text-amber-300 mb-3">💰 {tr("Weekly budget")}</div>
+        <div className="flex gap-2 mb-3"><input type="number" min="0" value={limit} onChange={e => setLimit(e.target.value)} placeholder="৳ per week (empty = no limit)" className={`${inputCls} flex-1`} style={inputStyle} /><button onClick={saveBudget} className="btn-primary px-4 rounded-lg text-xs">{tr("Save")}</button></div>
+        <div className="flex justify-between text-xs mb-1"><span>{tr("Spent this week")}: <b>{taka(bd.spent)}</b></span>{bd.limit ? <span className={bd.remaining < 0 ? "text-red-400" : "text-gray-400"}>{bd.remaining < 0 ? `over by ${taka(-bd.remaining)}` : `${taka(bd.remaining)} left`}</span> : null}</div>
+        <div className="h-3 rounded-full bg-gray-200 mb-1"><div className="h-3 rounded-full" style={{ width: `${bd.limit ? pct : 0}%`, background: barColor }}></div></div>
+        <div className="text-[11px] text-gray-400 mb-4">Last week: {taka(bd.prevWeekSpent)}{bd.limit ? ` · ${pct}% of budget used` : ""}</div>
+        <div className="flex items-end gap-2 h-24 mb-1">{bd.daily.map(d => <div key={d.day} className="flex-1 flex flex-col items-center justify-end" title={taka(d.spent)}><div className="w-full rounded-t bg-emerald-500" style={{ height: `${Math.max(2, (d.spent / dmax) * 70)}px` }}></div></div>)}</div>
+        <div className="flex gap-2 text-[10px] text-gray-400 mb-4">{bd.daily.map(d => <div key={d.day} className="flex-1 text-center">{d.day.slice(8)}</div>)}</div>
+        <div className="flex gap-2 flex-wrap text-[11px]">{cats.map(([k, label]) => <span key={k} className="px-2 py-1 rounded-full border" style={inputStyle}>{label}: {taka(bd.byCategory[k] || 0)}</span>)}</div>
+      </div>
+      {impact && <div className="lg:col-span-2 card p-5 flex items-center gap-4"><div className="text-3xl">🌱</div><div className="text-xs"><div className="font-700">Community impact</div><div className="text-gray-400">Last-hour deals have saved <b>{impact.mealsSaved}</b> {tr("meals saved from waste")} ({taka(impact.moneySaved)} saved by students). You: <b>{impact.mine.mealsSaved}</b> meals, {taka(impact.mine.moneySaved)}.</div></div></div>}
+    </div>
+  );
+}
+
+function TrackOrder({ orders, call, refreshOrders, refreshWallet, reorder, meId }) {
+  const [queue, setQueue] = useState({});
+  const [showQr, setShowQr] = useState({});
+  useEffect(() => { call("/api/orders/queue/mine").then(d => setQueue(d.queue || {})).catch(() => {}); }, [orders]);
+  const cancelOrder = async (id) => { if (!window.confirm("Cancel this Received order? Refund: 100% if 8+ hours remain, 60% if 7-8 hours remain, 50% if 5-7 hours remain, otherwise 0%.")) return; try { const result = await call(`/api/orders/${id}/cancel`, { method: "PATCH" }); alert(result.refundAmount > 0 ? `৳${result.refundAmount} refunded (${Math.round(result.refundRate * 100)}%)` : "Order cancelled. No refund is available within 5 hours of meal time."); await refreshOrders(); await refreshWallet(); } catch (e) { alert(e.message); } };
+  const exportCsv = async () => {
+    try { const res = await fetch(`${window.__campusApiBase}/api/orders/export/csv`, { headers: { Authorization: `Bearer ${window.__campusToken}` } }); if (res.ok) { const blob = await res.blob(); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "campusdine-orders.csv"; link.click(); URL.revokeObjectURL(url); return; } } catch (e) { /* use the loaded history below */ }
+    const csv = ["Order ID,Order Token,Status,Total Amount,Items", ...orders.map(o => [o.id, o.token, o.status, o.total, (o.items || []).map(i => `${i.name}(${i.qty})`).join("; ")].map(value => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = "campusdine-orders.csv"; link.click(); URL.revokeObjectURL(url);
+  };
+  if (orders.length === 0) {
+    return <div><KitchenSimulation /><button onClick={exportCsv} className="mb-4 px-3 py-2 rounded-lg border border-amber-400/30 text-xs">Export CSV</button><div className="card p-12 text-center text-xs text-gray-400">কোনো অর্ডার পাওয়া যায়নি।</div></div>;
+  }
+  return (
+    <div className="space-y-6 max-w-2xl mx-auto"><KitchenSimulation /><button onClick={exportCsv} className="px-3 py-2 rounded-lg border border-amber-400/30 text-xs">Export CSV</button>
+      {orders.map(o => {
+        const stepIndex = stepIndexOf(o.status);
+        const closed = o.status === "Cancelled" || o.status === "Refunded";
+        const isOwner = o.user_id === meId;
+        const q = queue[o.id];
+        const showCode = !closed && !o.picked_up_at && (isOwner || o.kind === "group");
+        return (
+          <div key={o.token || o.id} className="card overflow-hidden">
+            <div className="ticket p-5 flex items-center justify-between">
+              <div className="perf pl-4">
+                <div className="text-[10px] opacity-70 font-display uppercase tracking-widest">Token Number</div>
+                <div className="font-mono text-2xl font-800 text-amber-300" title={o.token}>{shortToken(o.token)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] opacity-70 font-display uppercase tracking-widest">Total Bill</div>
+                <div className="font-mono text-lg font-700">{taka(o.total)}</div>
+              </div>
+            </div>
+            <div className="p-6">
+              {o.label && <div className="note note-info text-xs mb-3 px-3 py-2">{o.kind === "treat" && !isOwner ? `🎁 You treated ${o.owner_name}` : o.label}{o.shares && o.shares.length > 1 ? ` · paid by ${o.shares.map(s => `${s.name} ${taka(s.amount)}`).join(", ")}` : ""}</div>}
+              {o.pickup_slot && <div className="text-xs font-700 mb-3" style={{ color: "#8A5B00" }}>⏰ {tr("Pickup")} {o.pickup_slot}</div>}
+              {q && !closed && <div className="note note-info text-xs mb-3 px-3 py-2">👥 {q.ahead} {tr("orders ahead of you")} · ~{q.etaMinutes} min{q.typicalMinutes ? ` (usually ~${q.typicalMinutes} min)` : ""}</div>}
+              {o.picked_up_at && <div className="note note-ok text-xs mb-3 px-3 py-2">✅ {tr("Collected")}</div>}
+              <div className="flex items-center justify-between mb-4">
+                {!closed && STATUSES.map((s, i) => (
+                  <React.Fragment key={s}>
+                    <div className="flex flex-col items-center gap-1.5 flex-1">
+                      <div className={`stepper-dot ${i < stepIndex ? "done" : i === stepIndex ? "current" : ""}`}></div>
+                      <span className="text-[11px] text-center" style={{ color: i <= stepIndex ? "var(--ink)" : "var(--ink-soft)", fontWeight: i === stepIndex ? 700 : 400 }}>{s}</span>
+                    </div>
+                    {i < STATUSES.length - 1 && <div className="h-0.5 flex-1 -mt-4" style={{ background: i < stepIndex ? "var(--leaf)" : "var(--panel-border)" }} />}
+                  </React.Fragment>
+                ))}
+              </div>
+              {closed && <div className="note note-danger text-xs mb-3 px-3 py-2">{o.status === "Refunded" ? `Cancelled — ${taka(o.refund_amount)} refunded to your wallet` : "Cancelled"}</div>}
+              <div className="text-xs text-gray-400 border-t border-amber-400/10 pt-3 mt-4">
+                {o.meal_date && <div className="mb-1">{tr("Meal date")}: {String(o.meal_date).slice(0, 10)}</div>}
+                Items: {o.items?.map(i => `${i.name} ×${i.qty}`).join(", ")}
+              </div>
+              <div className="flex gap-2 flex-wrap items-center">
+                {isOwner && (o.status === "Received" || o.status === "Confirmed") && <button onClick={() => cancelOrder(o.id)} className="mt-4 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 text-xs">{tr("Cancel order")}</button>}
+                {isOwner && <button onClick={() => reorder(o)} className="mt-4 px-3 py-2 rounded-lg border border-amber-400/40 text-xs">{tr("Order again")}</button>}
+                {showCode && <button onClick={() => setShowQr({ ...showQr, [o.id]: !showQr[o.id] })} className="mt-4 px-3 py-2 rounded-lg border border-amber-400/40 text-xs">{showQr[o.id] ? tr("Hide QR") : "📱 " + tr("Show pickup QR")}</button>}
+              </div>
+              {showCode && showQr[o.id] && <div><QRBox orderId={o.id} /><div className="text-[11px] text-gray-400 mt-1">Show this at the counter — or give the code <b className="font-mono">{shortToken(o.token)}</b>.</div></div>}
+              {o.status === "Ready" && isOwner && o.items?.map(i => <RatingForm key={i.menu_item_id || i.id} item={i} call={call} />)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KitchenSimulation() {
+  const [stage, setStage] = useState(1);
+  useEffect(() => { const timer = setInterval(() => setStage(current => (current + 1) % 3), 2600); return () => clearInterval(timer); }, []);
+  const stages = ["Received", "Cooking", "Ready"];
+  return <div className="simulation-card rounded-2xl p-5 mb-2"><div className="relative z-10 flex items-start justify-between gap-4"><div><div className="text-[10px] uppercase tracking-[.2em] opacity-70">Kitchen simulation</div><div className="font-display text-lg mt-1">Your meal is moving</div><div className="text-xs opacity-75 mt-1">A live preview of the campus pickup flow</div></div><div className="simulation-dot w-3 h-3 rounded-full bg-orange-300 mt-1"></div></div><div className="relative z-10 mt-5 simulation-line"></div><div className="relative z-10 grid grid-cols-3 mt-3 text-[10px] uppercase tracking-wider">{stages.map((name, index) => <div key={name} className={index <= stage ? "text-orange-200" : "opacity-50"}>{name}</div>)}</div></div>;
+}
+
+function RatingForm({ item, call }) {
+  const [rating, setRating] = useState(0); const [review, setReview] = useState(""); const [message, setMessage] = useState("");
+  const submit = async () => { try { await call(`/api/ratings/${item.menu_item_id || item.id}`, { method: "POST", body: { rating, review } }); setMessage("Review saved"); } catch (e) { setMessage(e.message); } };
+  return <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="text-gray-400">Rate {item.name}:</span>{[1, 2, 3, 4, 5].map(value => <button key={value} onClick={() => setRating(value)} className={value <= rating ? "text-amber-300 text-lg" : "text-gray-600 text-lg"}>★</button>)}<input value={review} onChange={e => setReview(e.target.value)} placeholder="Review (optional)" className="flex-1 min-w-32 px-2 py-1 rounded border text-xs" style={{ borderColor: "var(--panel-border)" }} /><button disabled={!rating} onClick={submit} className="px-2 py-1 rounded border border-amber-400/30">Save</button>{message && <span className="text-emerald-300">{message}</span>}</div>;
+}
+
+function ProfileTab({ call, user, onUserUpdate }) {
+  const [profile, setProfile] = useState(user); const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" }); const [message, setMessage] = useState("");
+  useEffect(() => { call("/api/profile").then(data => setProfile(data.user)).catch(e => setMessage(e.message)); }, []);
+  const save = async () => { try { await call("/api/profile", { method: "PUT", body: { name: profile.name, email: profile.email, phone: profile.phone } }); onUserUpdate({ ...user, name: profile.name }); setMessage("Profile updated"); } catch (e) { setMessage(e.message); } };
+  const changePassword = async () => { try { await call("/api/profile/change-password", { method: "POST", body: passwords }); setPasswords({ currentPassword: "", newPassword: "", confirmPassword: "" }); setMessage("Password changed"); } catch (e) { setMessage(e.message); } };
+  const subscribe = async () => { try { await call("/api/profile", { method: "PUT", body: { phone: profile.phone } }); await call("/api/notifications/subscribe", { method: "POST", body: { phoneNumber: profile.phone } }); setMessage("SMS notifications enabled"); } catch (e) { setMessage(e.message.includes("404") ? "Phone saved; notification service is not enabled on this server" : e.message); } };
+  const unsubscribe = async () => { try { await call("/api/notifications/unsubscribe", { method: "POST" }); setMessage("SMS notifications disabled"); } catch (e) { setMessage(e.message); } };
+  return <div className="grid lg:grid-cols-2 gap-6 max-w-4xl mx-auto"><div className="card p-5 space-y-3"><div className="font-display font-700 text-amber-300">Profile</div><input value={profile.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} placeholder="Name" className="w-full px-3 py-2 rounded border text-xs" style={{ borderColor: "var(--panel-border)" }} /><input value={profile.email || ""} onChange={e => setProfile({ ...profile, email: e.target.value })} placeholder="Email" className="w-full px-3 py-2 rounded border text-xs" style={{ borderColor: "var(--panel-border)" }} /><input value={profile.phone || ""} onChange={e => setProfile({ ...profile, phone: e.target.value })} placeholder="Notification phone" className="w-full px-3 py-2 rounded border text-xs" style={{ borderColor: "var(--panel-border)" }} /><button onClick={save} className="btn-primary px-4 py-2 rounded text-xs">Save profile</button><div className="flex gap-2"><button onClick={subscribe} className="px-3 py-2 rounded border border-amber-400/30 text-xs">Subscribe SMS</button><button onClick={unsubscribe} className="px-3 py-2 rounded border border-red-500/30 text-xs">Unsubscribe</button></div></div><div className="card p-5 space-y-3"><div className="font-display font-700 text-amber-300">Change password</div>{["currentPassword", "newPassword", "confirmPassword"].map(key => <input key={key} type="password" value={passwords[key]} onChange={e => setPasswords({ ...passwords, [key]: e.target.value })} placeholder={key.replace(/([A-Z])/g, " $1")} className="w-full px-3 py-2 rounded border text-xs" style={{ borderColor: "var(--panel-border)" }} />)}<button onClick={changePassword} className="btn-primary px-4 py-2 rounded text-xs">Change password</button>{message && <p className="text-xs text-emerald-300">{message}</p>}</div></div>;
+}
+
+/* ---------------- Meal Calendar Tab ---------------- */
+function MealCalendar({ role, year, month, calendar, bill, onToggle }) {
+  const total = daysInMonth(year, month);
+  const monthName = new Date(year, month - 1).toLocaleString("default", { month: "long" });
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+  const todayDay = new Date().getDate();
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 card p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="font-display font-700 text-lg text-amber-300">{monthName} {year}</div>
+          <div className="text-xs text-gray-400">ট্যাপ করে মিল পর্যায় পরিবর্তন করুন: Off → Full → Half</div>
+        </div>
+        <div className="grid grid-cols-7 gap-2 mb-2 text-xs text-center font-600 text-gray-400">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => <div key={i}>{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {Array.from({ length: firstWeekday }).map((_, i) => <div key={"e" + i}></div>)}
+          {Array.from({ length: total }).map((_, i) => {
+            const day = i + 1;
+            const status = calendar[day] || "off";
+            return (
+              <div key={day} onClick={() => day >= todayDay && onToggle(day, status)} title={day < todayDay ? "Past days can't be changed" : ""}
+                   className={`cal-cell text-xs font-700 ${status === "full" ? "cal-full" : status === "half" ? "cal-half" : ""} ${day < todayDay ? "opacity-40 cursor-not-allowed" : ""}`}>
+                {day}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-4 mt-6 text-xs text-gray-400 justify-center">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900 border border-amber-500"></span> Full Meal</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-400/20 border border-amber-400"></span> Half Meal</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-gray-700"></span> Off</span>
+        </div>
+      </div>
+
+      <div className="card p-6 h-fit">
+        <div className="font-display font-700 mb-4 text-amber-300">Monthly Bill Summary</div>
+        <div className="space-y-2 text-xs mb-4">
+          <div className="flex justify-between"><span>Full Meal ({taka(bill.fullRate)})</span><span className="font-mono">{bill.fullDays} days</span></div>
+          <div className="flex justify-between"><span>Half Meal ({taka(bill.halfRate)})</span><span className="font-mono">{bill.halfDays} days</span></div>
+        </div>
+        <div className="border-t border-amber-400/20 pt-3">
+          <div className="flex justify-between font-700 text-sm">
+            <span>Total Payable</span><span className="font-mono text-amber-300">{taka(bill.total)}</span>
+          </div>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">অটো-বিলিং হিসাব অনুযায়ী {role === "teacher" ? "Faculty" : "Student"} রেট প্রয়োগ করা হয়েছে।</p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Wallet Tab ---------------- */
+function WalletTab({ balance, topUp, gatewayTopUp, removeTransaction, transactions, busy, receivingNumber, demoTopup }) {
+  const [amount, setAmount] = useState(100);
+  const [method, setMethod] = useState("bkash");
+  const [message, setMessage] = useState("");
+  const startGatewayTopUp = async () => { setMessage(""); try { await gatewayTopUp(method, amount); setMessage(`${method} payment started`); } catch (e) { setMessage(e.message); } };
+  const clearHistory = async () => { try { await removeTransaction("all"); } catch (e) { setMessage(e.message); } };
+  return (
+    <div className="grid lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
+      <div className="lg:col-span-1 space-y-4">
+        <div className="ticket p-6">
+          <div className="perf pl-4">
+            <div className="text-[10px] uppercase font-display tracking-widest opacity-80">Available Balance</div>
+            <div className="font-mono text-3xl font-800 text-amber-300 mt-1">{taka(balance)}</div>
+          </div>
+        </div>
+        <div className="card p-5">
+          <div className="font-display font-700 mb-3 text-xs text-amber-300">Quick Top Up</div>
+          <div className="flex gap-2 mb-3">
+            {[100, 300, 500].map(v => (
+              <button key={v} onClick={() => setAmount(v)} className={`flex-1 py-1.5 rounded-md border text-xs font-mono ${amount === v ? "bg-amber-400 text-slate-950 font-700" : "border-amber-400/20"}`}>
+                {taka(v)}
+              </button>
+            ))}
+          </div>
+          <input type="number" min="1" max="9999" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full px-3 py-2 rounded-md border mb-3 font-mono text-xs" style={{ borderColor: "var(--panel-border)" }} />
+          {demoTopup && <button disabled={busy} onClick={() => amount > 0 && topUp(amount)} className="btn-gold w-full py-2.5 rounded-md text-xs">
+            {busy ? "Processing..." : "Demo Wallet Top Up"}
+          </button>}
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--panel-border)" }}>
+            <div className="text-[11px] mb-2" style={{ color: "var(--ink-soft)" }}>Gateway top-up to {receivingNumber}</div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {[['bkash', 'bKash'], ['nagad', 'Nagad']].map(([key, label]) => <button key={key} onClick={() => setMethod(key)} className={`py-2 rounded-md border text-xs ${method === key ? "bg-orange-500 text-white font-700" : "border-orange-200"}`}>{label}</button>)}
+            </div>
+            <button disabled={busy} onClick={startGatewayTopUp} className="w-full py-2 rounded-md border border-orange-300 text-orange-700 text-xs font-700">Pay via {method}</button>
+            {message && <p className="text-[11px] mt-2 text-orange-700">{message}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="lg:col-span-2 card p-6">
+        <div className="flex items-center justify-between gap-3 mb-4"><div className="font-display font-700 text-amber-300">Transaction History</div>{transactions.length > 0 && <button onClick={clearHistory} className="text-[11px] text-red-500 hover:text-red-700">Remove all</button>}</div>
+        {transactions.length === 0 ? (
+          <p className="text-xs text-gray-400">কোনো লেনদেনের তথ্য পাওয়া যায়নি।</p>
+        ) : (
+          <div className="space-y-2">
+            {transactions.map((t, i) => (
+              <div key={t.id || i} className="flex justify-between items-center gap-3 py-2.5 text-xs border-b border-amber-400/10">
+                <div>
+                  <div className="font-600">{t.label}</div>
+                  <div className="text-[10px] text-gray-400">{t.time}</div>
+                </div>
+                <div className="flex items-center gap-3"><span className={`font-mono font-700 ${t.amount > 0 ? "text-emerald-400" : "text-red-400"}`}>{t.amount > 0 ? "+" : ""}{taka(t.amount)}</span><button onClick={() => removeTransaction(t.id)} title="Remove from history" className="text-gray-400 hover:text-red-500">×</button></div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Admin: Overview ---------------- */
+function AdminOverview({ overview, orders, call }) {
+  const lowStock = overview.lowStock || [];
+  const [slotData, setSlotData] = useState(null);
+  useEffect(() => { call(`/api/slots?date=${isoDay(0)}`).then(setSlotData).catch(() => {}); }, [orders.length]);
+  const upcoming = slotData ? slotData.slots.filter(s => !s.past && s.booked > 0) : [];
+  const maxCap = Math.max(1, ...upcoming.map(s => s.capacity));
+  return (
+    <div className="space-y-6">
+      {lowStock.length > 0 && (
+        <div className="p-4 rounded-xl border flex items-center gap-3 bg-red-950/30 border-red-500/40 text-red-300">
+          <Icon path={I.bell} className="w-5 h-5 shrink-0 text-red-400" />
+          <div className="text-xs">
+            <span className="font-700">Stock Warning: </span>
+            {lowStock.map(i => i.name).join(", ")} খাবারগুলোর স্টক কম।
+          </div>
+        </div>
+      )}
+      {slotData && (slotData.ramadan || slotData.jummah) && <div className="flex gap-2 text-xs">{slotData.ramadan && <span className="note note-iftar px-3 py-1 rounded-full">🌙 {tr("Ramadan Mode")} on</span>}{slotData.jummah && <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800">🕌 Friday / {tr("Jummah")} schedule</span>}</div>}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="card p-5"><div className="text-xs text-gray-400">Full Meals Today</div><div className="font-mono text-2xl font-700 text-amber-300 mt-1">{overview.fullMealsToday ?? 0}</div></div>
+        <div className="card p-5"><div className="text-xs text-gray-400">Half Meals Today</div><div className="font-mono text-2xl font-700 text-amber-300 mt-1">{overview.halfMealsToday ?? 0}</div></div>
+        <div className="card p-5"><div className="text-xs text-gray-400">Pending Orders</div><div className="font-mono text-2xl font-700 text-amber-300 mt-1">{overview.pendingOrders ?? 0}</div></div>
+        <div className="card p-5"><div className="text-xs text-gray-400">Awaiting Pickup</div><div className="font-mono text-2xl font-700 text-amber-300 mt-1">{overview.awaitingPickup ?? 0}</div></div>
+        <div className="card p-5"><div className="text-xs text-gray-400">Today's Revenue</div><div className="font-mono text-2xl font-700 text-amber-300 mt-1">{taka(overview.revenueToday ?? 0)}</div></div>
+      </div>
+      <div className="card p-6">
+        <div className="font-display font-700 mb-3 text-amber-300">Rush Meter — today's pickup slots</div>
+        {upcoming.length === 0 ? <p className="text-xs text-gray-400">No upcoming slot has been booked yet.</p> : (
+          <div className="flex items-end gap-1.5 h-28 overflow-x-auto pb-1">
+            {upcoming.map(s => <div key={s.time} className="flex flex-col items-center justify-end min-w-[2rem]" title={`${s.time}: ${s.booked}/${s.capacity}`}><div className="text-[10px] font-mono">{s.booked}</div><div className="w-5 rounded-t" style={{ height: `${Math.max(6, (s.booked / maxCap) * 70)}px`, background: STATUS_DOT[s.status] }}></div><div className="text-[9px] text-gray-400">{s.time}</div></div>)}
+          </div>
+        )}
+      </div>
+      <div className="card p-6">
+        <div className="font-display font-700 mb-4 text-amber-300">Live Active Orders</div>
+        <div className="flex flex-wrap gap-2">
+          {orders.filter(o => ACTIVE_STATUSES.includes(o.status)).map(o => (
+            <span key={o.token} className="font-mono text-xs px-3 py-1.5 rounded-full bg-amber-400 text-slate-950 font-700">
+              {shortToken(o.token)} • {o.status}{o.pickup_slot ? ` • ${o.pickup_slot}` : ""}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminOrders({ orders, advance, cancel, collect }) {
+  const [filter, setFilter] = useState("active");
+  const isActive = o => ACTIVE_STATUSES.includes(o.status);
+  const match = {
+    active: isActive, ready: o => o.status === "Ready" && !o.picked_up_at, collected: o => Boolean(o.picked_up_at),
+    Cancelled: o => o.status === "Cancelled", Refunded: o => o.status === "Refunded", all: () => true,
+  };
+  const shown = orders.filter(match[filter]);
+  if (filter === "active") shown.sort((a, b) => (a.pickup_slot || "99:99").localeCompare(b.pickup_slot || "99:99") || a.id - b.id);
+  const filters = [["active", "Active"], ["ready", "Ready"], ["collected", "Collected"], ["Cancelled", "Cancelled"], ["Refunded", "Refunded"], ["all", "All"]];
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 flex-wrap">
+        {filters.map(([key, label]) => <button key={key} onClick={() => setFilter(key)} className={`tab-btn px-4 py-2 rounded-full text-xs ${filter === key ? "active" : ""}`}>{label}</button>)}
+      </div>
+      {shown.length === 0 ? <div className="card p-10 text-center text-xs text-gray-400">No orders here.</div> : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {shown.map(o => {
+            const open = isActive(o);
+            return (
+              <div key={o.token || o.id} className="card p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-mono font-700 text-lg text-amber-300" title={o.token}>{shortToken(o.token)}</span>
+                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 font-700">{o.picked_up_at ? "Collected" : o.status}</span>
+                  </div>
+                  {(o.customer || o.meal_date) && <div className="text-[11px] text-gray-400 mb-1">{o.customer}{o.external_id ? ` · ${o.external_id}` : ""}{o.meal_date ? ` · meal ${String(o.meal_date).slice(0, 10)}` : ""} · {o.payment_method}</div>}
+                  {o.pickup_slot && <div className="text-[11px] font-700 mb-1" style={{ color: "#8A5B00" }}>⏰ Pickup {o.pickup_slot}</div>}
+                  {o.label && <div className="text-[11px] mb-1">{o.label}</div>}
+                  <div className="text-xs text-gray-300 mb-3">{o.items?.map(i => `${i.name} ×${i.qty}`).join(", ")}</div>
+                </div>
+                <div className="flex justify-between items-center border-t border-amber-400/10 pt-3 gap-2">
+                  <span className="font-mono text-xs">{taka(o.total)}</span>
+                  {open ? (
+                    <div className="flex gap-2">
+                      <button onClick={() => cancel(o)} className="px-3 py-1.5 rounded-md text-[11px] border border-red-500/40 text-red-400">Cancel</button>
+                      <button onClick={() => advance(o.id)} className="btn-primary px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1">{o.status === "Cooking" ? "Mark ready" : "Start cooking"} <Icon path={I.arrow} className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : o.status === "Ready" && !o.picked_up_at ? (
+                    <button onClick={() => collect(o)} className="btn-primary px-3 py-1.5 rounded-md text-[11px]">{tr("Mark collected")}</button>
+                  ) : o.picked_up_at ? (
+                    <span className="text-xs text-emerald-500 flex items-center gap-1"><Icon path={I.check} className="w-4 h-4" /> {tr("Collected")}</span>
+                  ) : <span className="text-xs text-red-400">{o.status}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Counter screen: scan the student's QR (camera or USB scanner) or type the 8-character code.
+function AdminPickup({ orders, call, showError, collect }) {
+  const [code, setCode] = useState("");
+  const [last, setLast] = useState(null);
+  const [recent, setRecent] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [msg, setMsg] = useState("");
+  const videoRef = useRef(null);
+  const BD = window.BarcodeDetector;
+  const submit = async (value) => {
+    const c = (value ?? code).trim();
+    if (!c) return;
+    try {
+      const o = await call("/api/orders/pickup", { method: "POST", body: { code: c } });
+      setLast(o); setMsg(""); setCode(""); setRecent(r => [o, ...r].slice(0, 8));
+    } catch (e) { setLast(null); setMsg(e.message); }
+  };
+  useEffect(() => {
+    if (!scanning) return undefined;
+    let stream, timer, stopped = false;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+        const det = new BD({ formats: ["qr_code"] });
+        timer = setInterval(async () => {
+          if (stopped || !videoRef.current) return;
+          try { const found = await det.detect(videoRef.current); if (found.length) { stopped = true; setScanning(false); submit(found[0].rawValue); } } catch (e) { /* frame not ready */ }
+        }, 400);
+      } catch (e) { setMsg("Camera unavailable: " + e.message); setScanning(false); }
+    })();
+    return () => { stopped = true; clearInterval(timer); if (stream) stream.getTracks().forEach(t => t.stop()); };
+  }, [scanning]);
+  const waiting = orders.filter(o => o.status === "Ready" && !o.picked_up_at);
+  return (
+    <div className="grid lg:grid-cols-2 gap-6">
+      <div className="card p-5">
+        <div className="font-display font-700 text-amber-300 mb-3">📷 {tr("Scan or type the order code")}</div>
+        <div className="flex gap-2 mb-3">
+          <input autoFocus value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} placeholder="e.g. 9F3A12BC  or  CD:…" className={`${inputCls} flex-1 font-mono`} style={inputStyle} />
+          <button onClick={() => submit()} className="btn-primary px-5 rounded-lg text-xs">{tr("Collect")}</button>
+        </div>
+        {BD && <button onClick={() => setScanning(s => !s)} className="px-3 py-2 rounded-lg border border-amber-400/40 text-xs mb-3">{scanning ? "Stop camera" : "Scan with camera"}</button>}
+        {scanning && <video ref={videoRef} muted playsInline className="w-full rounded-xl bg-black mb-3" style={{ maxHeight: 260 }} />}
+        {msg && <div className="p-3 rounded-lg text-xs border border-red-400/50 text-red-500 bg-red-50">{msg}</div>}
+        {last && <div className="p-4 rounded-xl text-xs border border-emerald-400/60 bg-emerald-50 text-emerald-800"><div className="font-700 text-sm mb-1">✅ Hand over to {last.customer}</div><div>{last.items?.map(i => `${i.name} ×${i.qty}`).join(", ")}</div>{last.label && <div className="mt-1">{last.label}</div>}</div>}
+        {recent.length > 1 && <div className="mt-3 text-[11px] text-gray-400">Recently collected: {recent.slice(1).map(o => shortToken(o.token)).join(", ")}</div>}
+      </div>
+      <div className="card p-5">
+        <div className="font-display font-700 text-amber-300 mb-3">Ready — waiting for pickup ({waiting.length})</div>
+        {waiting.length === 0 ? <p className="text-xs text-gray-400">Nothing is waiting at the counter.</p> : waiting.map(o => (
+          <div key={o.id} className="flex items-center justify-between text-xs py-2 border-b border-amber-400/10 gap-2">
+            <span><b className="font-mono">{shortToken(o.token)}</b> · {o.customer}{o.pickup_slot ? ` · ${o.pickup_slot}` : ""}<div className="text-gray-400">{o.items?.map(i => `${i.name} ×${i.qty}`).join(", ")}</div></span>
+            <button onClick={() => collect(o)} className="px-3 py-1.5 rounded-md border border-amber-400/40">{tr("Mark collected")}</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminSettings({ call, showError }) {
+  const [s, setS] = useState(null);
+  const [saved, setSaved] = useState("");
+  useEffect(() => { call("/api/admin/settings").then(setS).catch(showError); }, []);
+  if (!s) return <div className="card p-10 text-center text-xs text-gray-400">Loading…</div>;
+  const set = (k, v) => setS({ ...s, [k]: v });
+  const save = async () => { try { setS(await call("/api/admin/settings", { method: "PUT", body: s })); setSaved("Saved ✓"); setTimeout(() => setSaved(""), 3000); } catch (e) { showError(e); } };
+  const field = (k, label, type = "number", extra = {}) => <label className="text-xs flex flex-col gap-1">{label}<input type={type} value={s[k]} onChange={e => set(k, type === "number" ? Number(e.target.value) : e.target.value)} className={inputCls} style={inputStyle} {...extra} /></label>;
+  const check = (k, label) => <label className="flex items-center gap-2 text-xs font-700"><input type="checkbox" checked={Boolean(s[k])} onChange={e => set(k, e.target.checked)} /> {label}</label>;
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="card p-5"><div className="font-display font-700 text-amber-300 mb-3">Canteen hours & pickup slots</div>
+        <div className="grid sm:grid-cols-3 gap-3">{field("open_time", "Opens", "time")}{field("close_time", "Closes", "time")}{field("slot_capacity", "Orders per 10-min slot", "number", { min: 1 })}{field("prep_min_per_order", "Minutes of kitchen time per order (queue ETA)", "number", { min: 0.5, step: 0.5 })}</div></div>
+      <div className="card p-5"><div className="font-display font-700 text-amber-300 mb-3">🌙 {tr("Ramadan Mode")}</div>
+        <div className="flex gap-6 items-end flex-wrap">{check("ramadan_mode", "Enable iftar pre-orders")}{field("maghrib_time", "Maghrib (iftar) time", "time")}</div>
+        <p className="text-[11px] text-gray-400 mt-2">When on, iftar specials appear on the menu and students pick up in the 60→10 minutes before Maghrib.</p></div>
+      <div className="card p-5"><div className="font-display font-700 text-amber-300 mb-3">🕌 Friday / {tr("Jummah")}</div>
+        <div className="grid sm:grid-cols-4 gap-3 items-end">{check("jummah_mode", "Pause for Jummah")}{field("jummah_start", "Break starts", "time")}{field("jummah_end", "Break ends", "time")}{field("jummah_capacity_mult", "Capacity multiplier around the break", "number", { min: 0.5, max: 5, step: 0.1 })}</div></div>
+      <div className="card p-5"><div className="font-display font-700 text-amber-300 mb-3">⏰ {tr("Last-hour deal")}</div>
+        <div className="grid sm:grid-cols-3 gap-3 items-end">{check("surplus_enabled", "Discount leftovers before closing")}{field("surplus_percent", "Discount %", "number", { min: 5, max: 90 })}{field("surplus_minutes", "Starts N minutes before closing", "number", { min: 5, max: 240 })}</div></div>
+      <div className="flex items-center gap-3"><button onClick={save} className="btn-primary px-6 py-2.5 rounded-lg text-xs">{tr("Save")}</button><span className="text-xs text-emerald-600">{saved}</span></div>
+    </div>
+  );
+}
+
+// Cook plan + pickup stats (lives at the bottom of the Reports tab).
+function KitchenInsights({ call, showError }) {
+  const [dayOffset, setDayOffset] = useState(1);
+  const [plan, setPlan] = useState(null);
+  const [pickup, setPickup] = useState(null);
+  useEffect(() => { call(`/api/admin/reports/demand?date=${isoDay(dayOffset)}`).then(setPlan).catch(showError); }, [dayOffset]);
+  useEffect(() => { call("/api/admin/reports/pickup").then(setPickup).catch(() => {}); }, []);
+  const max = plan ? Math.max(1, ...plan.items.map(i => i.recommended)) : 1;
+  return (
+    <div className="lg:col-span-3 grid lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 card p-6">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div className="font-display font-700 text-amber-300">🍳 {tr("Cook plan")}</div>
+          <select value={dayOffset} onChange={e => setDayOffset(Number(e.target.value))} className={inputCls} style={inputStyle}>{[0, 1, 2, 3, 4, 5, 6].map(o => <option key={o} value={o}>{dayText(o)}</option>)}</select>
+        </div>
+        {!plan ? <p className="text-xs text-gray-400">…</p> : (
+          <>
+            <p className="text-[11px] text-gray-400 mb-3">Based on {plan.basedOnDays} past {WEEKDAYS[new Date(`${plan.date}T00:00:00Z`).getUTCDay()]}s ({plan.confidence} confidence){plan.calendarScale !== 1 ? ` · meal-calendar signal ×${plan.calendarScale}` : ""} · +10% safety margin</p>
+            <table className="w-full text-xs"><thead><tr className="text-left text-gray-400"><th className="py-1">Item</th><th>Expected</th><th>Pre-ordered</th><th>In stock</th><th>Cook</th></tr></thead>
+              <tbody>{plan.items.filter(i => i.recommended > 0 || i.preOrdered > 0).map(i => <tr key={i.id} className="border-t border-amber-400/10"><td className="py-1.5">{i.name}<div className="h-1.5 rounded bg-gray-100 mt-1"><div className="h-1.5 rounded" style={{ width: `${(i.recommended / max) * 100}%`, background: "var(--taxi)" }}></div></div></td><td className="font-mono">{i.expected}</td><td className="font-mono">{i.preOrdered}</td><td className="font-mono">{i.inStock}</td><td className="font-mono font-700" style={{ color: i.toPrepare > 0 ? "#D92D20" : "#168A57" }}>{i.toPrepare > 0 ? `+${i.toPrepare}` : "✓ enough"}</td></tr>)}</tbody></table>
+            {plan.items.every(i => i.recommended === 0 && i.preOrdered === 0) && <p className="text-xs text-gray-400 mt-3">Not enough order history for this weekday yet.</p>}
+          </>
+        )}
+      </div>
+      <div className="card p-6">
+        <div className="font-display font-700 mb-3 text-amber-300">Pickup today</div>
+        {!pickup ? <p className="text-xs text-gray-400">…</p> : <div className="space-y-2 text-xs"><div>Collected: <b className="font-mono">{pickup.collectedToday}</b></div><div>Avg. wait at counter: <b className="font-mono">{pickup.avgMinutesUntilCollected ?? "—"}</b> min</div><div>Waiting now: <b className="font-mono">{pickup.waiting.length}</b>{pickup.waiting.some(w => w.minutes >= 20) ? <span className="text-red-400"> · some food has waited 20+ min</span> : ""}</div></div>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Admin: Menu Management ---------------- */
+function AdminMenu({ menu, updateItem, addItem, busy }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", bn: "", category: "heavy", price: "", stock: "" });
+
+  const submit = () => {
+    if (!form.name || !form.price) return;
+    addItem({ name: form.name, nameBn: form.bn, category: form.category, price: Number(form.price), stock: Number(form.stock) || 0, tag: "New" });
+    setForm({ name: "", bn: "", category: "heavy", price: "", stock: "" });
+    setShowAdd(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div className="font-display font-700 text-lg text-amber-300">Menu & Stock Controller</div>
+        <button onClick={() => setShowAdd(!showAdd)} className="btn-primary px-4 py-2 rounded-lg text-xs flex items-center gap-1.5">
+          <Icon path={I.plus} className="w-4 h-4" /> Add Item
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="card p-4 grid sm:grid-cols-5 gap-3 fade-in">
+          <input placeholder="Item Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+          <input placeholder="Bangla Name" value={form.bn} onChange={e => setForm({ ...form, bn: e.target.value })} className="px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }}>
+            {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+          <input placeholder="Price ৳" type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} className="px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+          <div className="flex gap-2">
+            <input placeholder="Stock" type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} className="w-full px-3 py-2 rounded-lg border text-xs" style={{ borderColor: "var(--panel-border)" }} />
+            <button disabled={busy} onClick={submit} className="btn-gold px-3 rounded-lg"><Icon path={I.check} className="w-4 h-4" /></button>
+          </div>
+        </div>
+      )}
+
+      <div className="card overflow-hidden">
+        <table className="w-full text-xs text-left">
+          <thead className="bg-amber-400 text-slate-950 font-display">
+            <tr>
+              <th className="p-3">Item</th>
+              <th className="p-3">Category</th>
+              <th className="p-3">Price (৳)</th>
+              <th className="p-3">Stock</th>
+              <th className="p-3">Tags</th>
+              <th className="p-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {menu.map(item => (
+              <tr key={item.id} className={`border-t border-amber-400/10 ${item.is_active === 0 || item.is_active === false ? "opacity-50" : ""}`}>
+                <td className="p-3 font-600">{item.name} <div className="text-[10px] text-gray-400 font-normal">{item.bn}</div></td>
+                <td className="p-3 capitalize">{item.category}</td>
+                <td className="p-3">
+                  <input type="number" defaultValue={item.price} onBlur={e => Number(e.target.value) !== Number(item.price) && updateItem(item.id, { price: Number(e.target.value) })} className="w-20 px-2 py-1 rounded border font-mono" style={{ borderColor: "var(--panel-border)" }} />
+                </td>
+                <td className="p-3">
+                  <input type="number" defaultValue={item.stock} onBlur={e => Number(e.target.value) !== Number(item.stock) && updateItem(item.id, { stock: Number(e.target.value) })} className="w-20 px-2 py-1 rounded border font-mono" style={{ borderColor: item.stock <= LOW_STOCK_THRESHOLD ? "var(--brick)" : "var(--panel-border)" }} />
+                </td>
+                <td className="p-3 text-[11px]">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 items-center min-w-[11rem]">
+                    <label><input type="checkbox" checked={Boolean(item.is_veg)} onChange={e => updateItem(item.id, { isVeg: e.target.checked })} /> Veg</label>
+                    <label><input type="checkbox" checked={Boolean(item.is_halal)} onChange={e => updateItem(item.id, { isHalal: e.target.checked })} /> Halal</label>
+                    <label><input type="checkbox" checked={Boolean(item.has_nuts)} onChange={e => updateItem(item.id, { hasNuts: e.target.checked })} /> Nuts</label>
+                    <label title="Only orderable in Ramadan mode"><input type="checkbox" checked={Boolean(item.iftar_only)} onChange={e => updateItem(item.id, { iftarOnly: e.target.checked })} /> Iftar</label>
+                    <label title="Gets the last-hour discount"><input type="checkbox" checked={Boolean(item.surplus_eligible)} onChange={e => updateItem(item.id, { surplusEligible: e.target.checked })} /> Deal</label>
+                    <select value={item.spice_level || 0} onChange={e => updateItem(item.id, { spiceLevel: Number(e.target.value) })} className="border rounded px-1" style={{ borderColor: "var(--panel-border)" }}>{[0, 1, 2, 3].map(n => <option key={n} value={n}>{n ? SPICE[n] : "no spice"}</option>)}</select>
+                  </div>
+                </td>
+                <td className="p-3">{item.is_active === 0 || item.is_active === false ? <button onClick={() => updateItem(item.id, { isActive: true })} className="text-emerald-600 text-[11px]">Restore</button> : <button onClick={() => window.confirm(`Hide ${item.name} from the menu? Past orders are kept.`) && updateItem(item.id, { isActive: false })} className="text-red-400 text-[11px]">Archive</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Admin: Orders Queue ---------------- */
+function AdminCoupons({ coupons, createCoupon, toggleCoupon }) {
+  const blank = { code: "", discountType: "PERCENTAGE", discountValue: "", minOrderAmount: "", maxDiscount: "", usageLimit: "", expiryDate: "" };
+  const [form, setForm] = useState(blank);
+  const box = "px-3 py-2 rounded-lg border text-xs";
+  const bd = { borderColor: "var(--panel-border)" };
+  const submit = async () => { if (!form.code || !form.discountValue) return; if (await createCoupon(form)) setForm(blank); };
+  return (
+    <div className="space-y-4">
+      <div className="font-display font-700 text-lg text-amber-300">Coupons</div>
+      <div className="card p-4 grid sm:grid-cols-4 gap-3">
+        <input placeholder="CODE" value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className={box} style={bd} />
+        <select value={form.discountType} onChange={e => setForm({ ...form, discountType: e.target.value })} className={box} style={bd}><option value="PERCENTAGE">% off</option><option value="FIXED">৳ off</option></select>
+        <input type="number" min="0" placeholder="Value" value={form.discountValue} onChange={e => setForm({ ...form, discountValue: e.target.value })} className={box} style={bd} />
+        <input type="number" min="0" placeholder="Min order ৳" value={form.minOrderAmount} onChange={e => setForm({ ...form, minOrderAmount: e.target.value })} className={box} style={bd} />
+        <input type="number" min="0" placeholder="Max discount ৳" value={form.maxDiscount} onChange={e => setForm({ ...form, maxDiscount: e.target.value })} className={box} style={bd} />
+        <input type="number" min="1" placeholder="Usage limit" value={form.usageLimit} onChange={e => setForm({ ...form, usageLimit: e.target.value })} className={box} style={bd} />
+        <input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} className={box} style={bd} title="Expiry date" />
+        <button onClick={submit} className="btn-primary px-4 py-2 rounded-lg text-xs">Create coupon</button>
+      </div>
+      <div className="card overflow-hidden">
+        <table className="w-full text-xs text-left">
+          <thead className="bg-amber-400 text-slate-950 font-display"><tr><th className="p-3">Code</th><th className="p-3">Discount</th><th className="p-3">Min order</th><th className="p-3">Used</th><th className="p-3">Expires</th><th className="p-3">Status</th></tr></thead>
+          <tbody>
+            {coupons.length === 0 && <tr><td colSpan="6" className="p-6 text-center text-gray-400">No coupons yet.</td></tr>}
+            {coupons.map(c => (
+              <tr key={c.id} className="border-t border-amber-400/10">
+                <td className="p-3 font-mono font-700">{c.code}</td>
+                <td className="p-3">{c.discount_type === "PERCENTAGE" ? `${c.discount_value}%` : taka(c.discount_value)}{c.max_discount ? ` (max ${taka(c.max_discount)})` : ""}</td>
+                <td className="p-3">{taka(c.min_order_amount)}</td>
+                <td className="p-3">{c.used_count}{c.usage_limit ? ` / ${c.usage_limit}` : ""}</td>
+                <td className="p-3">{c.expiry_date ? new Date(c.expiry_date).toLocaleDateString() : "Never"}</td>
+                <td className="p-3"><button onClick={() => toggleCoupon(c.id, !c.is_active)} className={`px-3 py-1 rounded-full border text-[11px] ${c.is_active ? "border-emerald-500/50 text-emerald-600" : "border-gray-400 text-gray-400"}`}>{c.is_active ? "Active" : "Disabled"}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Admin: Reports ---------------- */
+function AdminReports({ trend, forecast, daily, topItems, exportCsv, call, showError }) {
+  const max = Math.max(1, ...trend.map(r => r.revenue));
+  const dmax = Math.max(1, ...daily.map(r => r.revenue));
+  return (
+    <div className="grid lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 card p-6">
+        <div className="font-display font-700 mb-6 text-amber-300">Revenue Trend</div>
+        <div className="flex items-end gap-4 h-48 pt-6">
+          {trend.map(r => (
+            <div key={r.ym} className="flex-1 flex flex-col items-center gap-2">
+              <div className="text-[10px] font-mono text-gray-400">{r.revenue >= 1000 ? `${(r.revenue / 1000).toFixed(1)}k` : Math.round(r.revenue)}</div>
+              <div className="w-full max-w-[5rem] rounded-t-md bg-amber-400" style={{ border: "2px solid var(--ink)", borderBottom: 0, height: `${(r.revenue / max) * 130}px` }}></div>
+              <div className="text-[11px] font-600">{monthLabel(r.ym)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="card p-6">
+        <div className="font-display font-700 mb-2 text-amber-300">Demand Forecast</div>
+        <p className="text-xs text-gray-400 mb-4">Subscription analytics derived</p>
+        <div className="ticket p-5">
+          <div className="perf pl-4">
+            <div className="text-[10px] uppercase font-display opacity-70">Predicted Meals (Tomorrow)</div>
+            <div className="font-mono text-3xl font-800 text-amber-300 mt-1">{forecast.predictedMealCount ?? 0}</div>
+          </div>
+        </div>
+        <button onClick={exportCsv} className="mt-4 w-full px-3 py-2 rounded-lg border border-amber-400/40 text-xs">Export all orders (CSV)</button>
+      </div>
+      <div className="lg:col-span-2 card p-6">
+        <div className="font-display font-700 mb-4 text-amber-300">Last 7 Days</div>
+        <div className="flex items-end gap-3 h-36">
+          {daily.map(d => (
+            <div key={d.day} className="flex-1 flex flex-col items-center gap-1" title={`${d.orders} orders`}>
+              <div className="text-[10px] font-mono text-gray-400">{d.orders}</div>
+              <div className="w-full rounded-t-md bg-emerald-500" style={{ height: `${Math.max(3, (d.revenue / dmax) * 80)}px` }}></div>
+              <div className="text-[10px]">{d.day.slice(5)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="card p-6">
+        <div className="font-display font-700 mb-3 text-amber-300">Top Sellers (30 days)</div>
+        {topItems.length === 0 ? <p className="text-xs text-gray-400">No sales yet.</p> : <div className="space-y-2">{topItems.map((t, i) => <div key={t.name} className="flex justify-between text-xs"><span>{i + 1}. {t.name}</span><span className="font-mono">{t.sold} sold</span></div>)}</div>}
+      </div>
+      <KitchenInsights call={call} showError={showError} />
+    </div>
+  );
+}
+
+function AdminReviews({ reviews }) {
+  return <div className="space-y-4"><div className="flex items-center justify-between"><div className="font-display font-700 text-lg text-amber-300">Customer Reviews</div><span className="text-xs text-gray-400">{reviews.length} review{reviews.length === 1 ? "" : "s"}</span></div>{reviews.length === 0 ? <div className="card p-10 text-center text-xs text-gray-400">No customer reviews yet.</div> : <div className="grid md:grid-cols-2 gap-4">{reviews.map(review => <div key={review.id} className="card p-5"><div className="flex justify-between gap-3"><div><div className="font-700 text-sm">{review.menu_name}</div><div className="text-[11px] text-gray-400">{review.user_name} · {review.external_id}</div></div><div className="text-amber-500 tracking-widest">{"★".repeat(review.rating)}<span className="text-gray-300">{"★".repeat(5 - review.rating)}</span></div></div><p className="text-sm mt-4" style={{ color: "var(--ink-soft)" }}>{review.review || "No written review"}</p><div className="text-[10px] text-gray-400 mt-3">{new Date(review.created_at).toLocaleString()}</div></div>)}</div>}</div>;
+}
+
+/* ---------------- App Core Entry ---------------- */
+function App() {
+  const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
+  const [session, setSession] = useState(null);
+  const [tab, setTab] = useState("menu");
+  const [lang, setLang] = useState(() => { try { return localStorage.getItem("campusdine_lang") || "en"; } catch (e) { return "en"; } });
+  LANG = lang; // read by tr() while rendering
+  const toggleLang = () => { const next = lang === "bn" ? "en" : "bn"; try { localStorage.setItem("campusdine_lang", next); } catch (e) { /* storage blocked */ } setLang(next); };
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [connected, setConnected] = useState(false);
+
+  const [menu, setMenu] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [wallet, setWallet] = useState({ balance: 0, transactions: [] });
+  const [calendar, setCalendar] = useState({});
+  const [bill, setBill] = useState({ fullDays: 0, halfDays: 0, fullRate: 0, halfRate: 0, total: 0 });
+  const [overview, setOverview] = useState({});
+  const [trend, setTrend] = useState([]);
+  const [forecast, setForecast] = useState({});
+  const [favorites, setFavorites] = useState([]);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [adminReviews, setAdminReviews] = useState([]);
+  const [receivingNumber, setReceivingNumber] = useState("");
+  const [demoTopup, setDemoTopup] = useState(true);
+  const [booting, setBooting] = useState(true);
+  const [notifs, setNotifs] = useState({ list: [], unread: 0 });
+  const [toasts, setToasts] = useState([]);
+  const [daily, setDaily] = useState([]);
+  const [topItems, setTopItems] = useState([]);
+  const [adminCoupons, setAdminCoupons] = useState([]);
+  const orderKeyRef = useRef(null);
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  const socketRef = useRef(null);
+  const pushToast = (message) => { const id = Date.now() + Math.random(); setToasts(t => [...t, { id, message }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 6000); };
+  const showError = (e) => setError(typeof e === "string" ? e : e.message);
+
+  const call = (path, opts) => api(apiBase, path, { ...opts, token: session?.token }).catch(e => {
+    if (e.status === 401 && /token/i.test(e.message)) { logout(); e.message = "Your session expired. Please log in again."; }
+    throw e;
+  });
+
+  // public settings (receiving number etc.) + restore the session after a page refresh
+  useEffect(() => {
+    api(apiBase, "/api/config").then(c => { setReceivingNumber(c.receivingNumber || ""); setDemoTopup(c.demoTopup !== false); }).catch(() => {});
+    let saved = null;
+    try { saved = sessionStorage.getItem("campusdine_token"); } catch (e) { /* storage blocked */ }
+    if (!saved) { setBooting(false); return; }
+    api(apiBase, "/api/auth/me", { token: saved })
+      .then(data => { setSession({ token: saved, user: data.user }); setTab(data.user.role === "admin" ? "overview" : "menu"); })
+      .catch(() => { try { sessionStorage.removeItem("campusdine_token"); } catch (e) {} })
+      .finally(() => setBooting(false));
+  }, []);
+
+  const mapMenu = (rows) => rows.map(m => ({ ...m, bn: m.name_bn }));
+  const mapWallet = (data) => ({
+    balance: data.balance,
+    transactions: data.transactions.map(t => ({ id: t.id, label: t.label, amount: t.amount, time: new Date(t.created_at).toLocaleString() })),
+  });
+  const mapCalendar = (rows) => {
+    const map = {};
+    rows.forEach(r => { map[Number(String(r.the_date).slice(8, 10))] = r.status; });
+    return map;
+  };
+
+  const refreshMenu = async () => setMenu(mapMenu(await call(session?.user?.role === "admin" ? "/api/menu?includeArchived=true" : "/api/menu")));
+  const refreshWallet = async () => setWallet(mapWallet(await call("/api/wallet")));
+  const removeTransaction = async (id) => { if (!id || !window.confirm(id === "all" ? "Remove all wallet entries from your history?" : "Remove this entry from your wallet history?")) return; try { await call(id === "all" ? "/api/wallet/transactions" : `/api/wallet/transactions/${id}`, { method: "DELETE" }); await refreshWallet(); } catch (e) { showError(e); } };
+  const refreshCalendar = async () => {
+    setCalendar(mapCalendar(await call(`/api/calendar?year=${year}&month=${month}`)));
+    setBill(await call(`/api/calendar/bill?year=${year}&month=${month}`));
+  };
+  const refreshMyOrders = async () => setOrders(await call("/api/orders/mine"));
+  const refreshFavorites = async () => { const data = await call("/api/favorites"); setFavorites(data.favorites || []); };
+  const refreshCoupons = async () => { const data = await call("/api/coupons/available"); setAvailableCoupons(data.coupons || []); };
+  const refreshAdminOrders = async () => setOrders(await call("/api/orders"));
+  const refreshOverview = async () => setOverview(await call("/api/admin/overview"));
+  const refreshReports = async () => {
+    setTrend(await call("/api/admin/reports/revenue-trend"));
+    setForecast(await call("/api/admin/reports/forecast"));
+    setDaily(await call("/api/admin/reports/daily"));
+    setTopItems(await call("/api/admin/reports/top-items"));
+  };
+  const refreshAdminCoupons = async () => { const data = await call("/api/coupons"); setAdminCoupons(data.coupons || []); };
+  const refreshNotifs = async () => { const data = await call("/api/notifications/history"); setNotifs({ list: data.notifications || [], unread: data.unread || 0 }); };
+  const readNotifs = async () => { try { await call("/api/notifications/read-all", { method: "POST" }); setNotifs(p => ({ unread: 0, list: p.list.map(n => ({ ...n, read: true })) })); } catch (e) { /* non-critical */ } };
+  const refreshAdminReviews = async () => { const data = await call("/api/ratings/admin/reviews"); setAdminReviews(data.reviews || []); };
+
+  const onAuth = (token, user) => {
+    try { sessionStorage.setItem("campusdine_token", token); } catch (e) { /* storage blocked */ }
+    setSession({ token, user });
+    setTab(user.role === "admin" ? "overview" : "menu");
+  };
+
+  const logout = () => {
+    if (socketRef.current) socketRef.current.disconnect();
+    try { sessionStorage.removeItem("campusdine_token"); } catch (e) {}
+    setSession(null); setCart([]); setError(null); setNotifs({ list: [], unread: 0 }); setOrders([]);
+  };
+
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      try {
+        if (session.user.role === "admin") {
+          await Promise.all([refreshMenu(), refreshAdminOrders(), refreshOverview(), refreshReports(), refreshAdminReviews(), refreshAdminCoupons()]);
+        } else {
+          await Promise.all([refreshMenu(), refreshMyOrders(), refreshWallet(), refreshCalendar(), refreshFavorites(), refreshCoupons(), refreshNotifs()]);
+        }
+      } catch (e) { showError(e); }
+    })();
+  }, [session?.token]);
+
+  useEffect(() => {
+    if (!session) return;
+    const socket = io(apiBase, { auth: { token: session.token } });
+    socketRef.current = socket;
+    socket.on("connect", () => setConnected(true));
+    socket.on("disconnect", () => setConnected(false));
+    const isAdmin = session.user.role === "admin";
+    socket.on("order:new", (order) => {
+      if (!isAdmin) return;
+      setOrders(prev => prev.some(o => o.id === order.id) ? prev : [order, ...prev]);
+      pushToast(`New order ${shortToken(order.token)} from ${order.customer || "a customer"}`);
+      api(apiBase, "/api/admin/overview", { token: session.token }).then(setOverview).catch(() => {});
+    });
+    socket.on("order:update", (order) => {
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status, ...(order.refundAmount !== undefined ? { refund_amount: order.refundAmount } : {}), ...(order.picked_up_at !== undefined ? { picked_up_at: order.picked_up_at } : {}) } : o));
+    });
+    socket.on("stock:low", (item) => { if (isAdmin) { pushToast(item.stock === 0 ? `${item.name} is SOLD OUT` : `Low stock: ${item.name} (${item.stock} left)`); api(apiBase, "/api/admin/overview", { token: session.token }).then(setOverview).catch(() => {}); } });
+    socket.on("notification", (n) => {
+      setNotifs(p => ({ unread: p.unread + 1, list: [n, ...p.list].slice(0, 30) }));
+      pushToast(n.message);
+      if (!isAdmin) {
+        api(apiBase, "/api/wallet", { token: session.token }).then(d => setWallet(mapWallet(d))).catch(() => {});
+        api(apiBase, "/api/orders/mine", { token: session.token }).then(setOrders).catch(() => {}); // picks up treats / group orders other people placed for you
+      }
+    });
+    return () => socket.disconnect();
+  }, [session?.token, apiBase]);
+
+  const toggleFavorite = async (item) => {
+    try { const exists = favorites.some(f => f.id === item.id); await call(`/api/favorites/${item.id}`, { method: exists ? "DELETE" : "POST" }); await refreshFavorites(); } catch (e) { showError(e); }
+  };
+
+  const placeOrder = async (cartItems, paymentMethod, coupon, total, extra = {}) => {
+    setBusy(true); setError(null);
+    // Same cart + same payment = same key, so a double-click / network retry can never create two orders.
+    const sig = JSON.stringify([cartItems.map(c => [c.id, c.qty]), paymentMethod, coupon?.code || "", extra.pickupSlot || "", extra.mealDate || ""]);
+    if (!orderKeyRef.current || orderKeyRef.current.sig !== sig) orderKeyRef.current = { sig, key: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}` };
+    try {
+      const order = await call("/api/orders", { method: "POST", body: { items: cartItems.map(c => ({ id: Number(c.id), qty: Number(c.qty) })), couponCode: coupon?.code, paymentMethod, pickupSlot: extra.pickupSlot || undefined, mealDate: extra.mealDate || undefined, idempotencyKey: orderKeyRef.current.key } });
+      orderKeyRef.current = null;
+      if (order.savings > 0) pushToast(`🌱 You saved ${taka(order.savings)} with the last-hour deal!`);
+      if (paymentMethod === "bkash" || paymentMethod === "nagad") {
+        try {
+          const payment = await call(`/api/payment/${paymentMethod}/initiate`, { method: "POST", body: { orderId: order.id } });
+          const paymentUrl = payment.paymentUrl || payment.redirectUrl;
+          if (paymentUrl) window.open(paymentUrl, "_blank", "noopener");
+        } catch (e) { showError(`Order placed, but online payment could not start: ${e.message} You can pay at pickup or cancel the order in Track Order.`); }
+      }
+      setCart([]);
+      await Promise.all([refreshMyOrders(), refreshMenu(), paymentMethod === "wallet" ? refreshWallet() : Promise.resolve(), refreshCoupons()]);
+      setTab("track");
+    } catch (e) { showError(e); } finally { setBusy(false); }
+  };
+
+  const reorder = (order) => {
+    const missing = [];
+    setCart(prev => {
+      let next = [...prev];
+      (order.items || []).forEach(it => {
+        const m = menu.find(x => x.id === it.menu_item_id);
+        if (!m || m.stock <= 0) { missing.push(it.name); return; }
+        const qty = Math.min(it.qty, m.stock, 20);
+        const ex = next.find(p => p.id === m.id);
+        next = ex ? next.map(p => p.id === m.id ? { ...p, qty: Math.min(p.qty + qty, m.stock, 20) } : p) : [...next, { ...m, qty }];
+      });
+      return next;
+    });
+    setTab("menu");
+    setTimeout(() => pushToast(missing.length ? `Added to cart. Unavailable now: ${missing.join(", ")}` : "Items added to your cart"), 0);
+  };
+
+  const gatewayTopUp = async (method, amount) => {
+    const data = await call(`/api/payment/${method}/wallet-topup`, { method: "POST", body: { amount: Number(amount) } });
+    if (data.redirectUrl || data.paymentUrl) window.open(data.redirectUrl || data.paymentUrl, "_blank", "noopener");
+    await refreshWallet();
+    return data;
+  };
+
+  useEffect(() => { window.__campusApiBase = apiBase; window.__campusToken = session?.token || ""; }, [apiBase, session]);
+
+  const advanceOrder = async (id) => {
+    try {
+      await call(`/api/orders/${id}/advance`, { method: "PATCH" });
+      await refreshAdminOrders();
+    } catch (e) { showError(e); }
+  };
+
+  const topUp = async (amount) => {
+    setBusy(true); setError(null);
+    try {
+      await call("/api/wallet/topup", { method: "POST", body: { amount } });
+      await refreshWallet();
+    } catch (e) { showError(e); } finally { setBusy(false); }
+  };
+
+  const toggleDay = async (day, currentStatus) => {
+    const next = currentStatus === "off" ? "full" : currentStatus === "full" ? "half" : "off";
+    try {
+      await call(`/api/calendar/${day}`, { method: "PUT", body: { year, month, status: next } });
+      await refreshCalendar();
+    } catch (e) { showError(e); }
+  };
+
+  const adminCancel = async (order) => {
+    if (!window.confirm(`Cancel order ${shortToken(order.token)}? The customer gets a full refund.`)) return;
+    try { await call(`/api/orders/${order.id}/admin-cancel`, { method: "PATCH" }); await Promise.all([refreshAdminOrders(), refreshOverview(), refreshMenu()]); } catch (e) { showError(e); }
+  };
+  const createCoupon = async (f) => {
+    const body = { code: f.code, discountType: f.discountType, discountValue: Number(f.discountValue) };
+    if (f.minOrderAmount) body.minOrderAmount = Number(f.minOrderAmount);
+    if (f.maxDiscount) body.maxDiscount = Number(f.maxDiscount);
+    if (f.usageLimit) body.usageLimit = Number(f.usageLimit);
+    if (f.expiryDate) body.expiryDate = `${f.expiryDate} 23:59:59`;
+    try { await call("/api/coupons", { method: "POST", body }); await refreshAdminCoupons(); return true; } catch (e) { showError(e); return false; }
+  };
+  const toggleCoupon = async (id, isActive) => { try { await call(`/api/coupons/${id}`, { method: "PUT", body: { isActive } }); await refreshAdminCoupons(); } catch (e) { showError(e); } };
+  const adminCollect = async (order) => {
+    try { await call("/api/orders/pickup", { method: "POST", body: { code: order.token } }); await Promise.all([refreshAdminOrders(), refreshOverview()]); } catch (e) { showError(e); }
+  };
+  const exportAdminCsv = async () => { try { await downloadFile("/api/admin/reports/orders.csv", "orders.csv"); } catch (e) { showError(e); } };
+  const updateMenuItem = async (id, patch) => {
+    try {
+      await call(`/api/menu/${id}`, { method: "PUT", body: patch });
+      await refreshMenu();
+    } catch (e) { showError(e); }
+  };
+  const addMenuItem = async (item) => {
+    try {
+      await call("/api/menu", { method: "POST", body: item });
+      await refreshMenu();
+    } catch (e) { showError(e); }
+  };
+
+  if (booting) return <div className="min-h-screen grid place-items-center text-xs" style={{ color: "var(--ink-soft)" }}>Loading…</div>;
+  if (!session) return <Login apiBase={apiBase} setApiBase={setApiBase} onAuth={onAuth} />;
+
+  const userTabs = [
+    { key: "menu", label: "Menu & Order", icon: I.menu },
+    { key: "track", label: "Track Order", icon: I.clock },
+    { key: "friends", label: "Friends", icon: I.user },
+    { key: "calendar", label: "Calendar & Classes", icon: I.calendar },
+    { key: "wallet", label: "Wallet", icon: I.wallet },
+    { key: "me", label: "My Stats", icon: I.chart },
+    { key: "profile", label: "Profile & Alerts", icon: I.user },
+  ];
+  const adminTabs = [
+    { key: "overview", label: "Overview", icon: I.dashboard },
+    { key: "adminMenu", label: "Menu", icon: I.box },
+    { key: "adminOrders", label: "Orders Queue", icon: I.ticket },
+    { key: "adminPickup", label: "Pickup", icon: I.check },
+    { key: "reports", label: "Reports", icon: I.chart },
+    { key: "coupons", label: "Coupons", icon: I.ticket },
+    { key: "reviews", label: "Reviews", icon: I.ticket },
+    { key: "adminSettings", label: "Settings", icon: I.dashboard },
+  ];
+
+  return (
+    <div className="min-h-screen">
+      <TopBar role={session.user.role} name={session.user.name}
+              tabs={session.user.role === "admin" ? adminTabs : userTabs}
+              active={tab} setActive={setTab} onLogout={logout} connected={connected} lang={lang} toggleLang={toggleLang} notifs={session.user.role === "admin" ? null : notifs} onReadNotifs={readNotifs} />
+      
+      <main className="max-w-6xl mx-auto p-6 fade-in" key={tab}>
+        {error && (
+          <div className="p-4 rounded-lg mb-6 text-xs flex justify-between items-center border bg-red-950/40 border-red-500/40 text-red-300">
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="font-700 text-sm">✕</button>
+          </div>
+        )}
+
+        {session.user.role !== "admin" && tab === "menu" && (
+          <MenuOrder menu={menu} cart={cart} setCart={setCart} placeOrder={placeOrder} walletBalance={wallet.balance} busy={busy} favorites={favorites} toggleFavorite={toggleFavorite} call={call} receivingNumber={receivingNumber} availableCoupons={availableCoupons} refreshMenu={refreshMenu} />
+        )}
+        {session.user.role !== "admin" && tab === "track" && <TrackOrder orders={orders} call={call} refreshOrders={refreshMyOrders} refreshWallet={refreshWallet} reorder={reorder} meId={session.user.id} />}
+        {session.user.role !== "admin" && tab === "friends" && <FriendsTab call={call} menu={menu} me={session.user.id} showError={showError} refreshWallet={refreshWallet} refreshOrders={refreshMyOrders} />}
+        {session.user.role !== "admin" && tab === "me" && <MeTab call={call} showError={showError} />}
+        {session.user.role !== "admin" && tab === "calendar" && (
+          <><MealCalendar role={session.user.role} year={year} month={month} calendar={calendar} bill={bill} onToggle={toggleDay} /><ClassRoutine call={call} showError={showError} /></>
+        )}
+        {session.user.role !== "admin" && tab === "wallet" && (
+          <WalletTab balance={wallet.balance} topUp={topUp} gatewayTopUp={gatewayTopUp} removeTransaction={removeTransaction} receivingNumber={receivingNumber} transactions={wallet.transactions} busy={busy} demoTopup={demoTopup} />
+        )}
+        {session.user.role !== "admin" && tab === "profile" && <ProfileTab call={call} user={session.user} onUserUpdate={user => setSession(prev => ({ ...prev, user }))} />}
+
+        {session.user.role === "admin" && tab === "overview" && <AdminOverview overview={overview} orders={orders} call={call} />}
+        {session.user.role === "admin" && tab === "adminMenu" && (
+          <AdminMenu menu={menu} updateItem={updateMenuItem} addItem={addMenuItem} busy={busy} />
+        )}
+        {session.user.role === "admin" && tab === "adminOrders" && <AdminOrders orders={orders} advance={advanceOrder} cancel={adminCancel} collect={adminCollect} />}
+        {session.user.role === "admin" && tab === "adminPickup" && <AdminPickup orders={orders} call={call} showError={showError} collect={adminCollect} />}
+        {session.user.role === "admin" && tab === "adminSettings" && <AdminSettings call={call} showError={showError} />}
+        {session.user.role === "admin" && tab === "reports" && <AdminReports trend={trend} forecast={forecast} daily={daily} topItems={topItems} exportCsv={exportAdminCsv} call={call} showError={showError} />}
+        {session.user.role === "admin" && tab === "coupons" && <AdminCoupons coupons={adminCoupons} createCoupon={createCoupon} toggleCoupon={toggleCoupon} />}
+        {session.user.role === "admin" && tab === "reviews" && <AdminReviews reviews={adminReviews} />}
+      </main>
+      <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-xs">
+        {toasts.map(t => <div key={t.id} className="px-4 py-3 rounded-xl text-xs shadow-lg border fade-in" style={{ background: "#fff", borderColor: "var(--ink)", color: "var(--ink)" }}>{t.message}</div>)}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
